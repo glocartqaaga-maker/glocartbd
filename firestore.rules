@@ -33,7 +33,11 @@ service cloud.firestore {
     // Products collection
     match /products/{productId} {
       allow read: if true; // Public can browse products
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        // Allow public/customer order stock deduction: only modifying 'stock' and 'updatedAt'
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'updatedAt'])
+      );
     }
 
     // Categories collection
@@ -61,11 +65,11 @@ service cloud.firestore {
 
     // Orders collection
     match /orders/{orderId} {
-      // Public / Guest can read for public tracking if order matches id
+      // Public / Guest can read for public tracking if order matches id or public querying
       allow read: if true;
-      // Signed in customer can create orders, or anyone placing an order
+      // Anyone can create an order (logged-in customer or guest)
       allow create: if true;
-      // Only admin or customer can update (e.g. customer cancelling if pending)
+      // Only admin or ordering customer can update (e.g. customer cancelling if pending)
       allow update: if isAdmin() || (isSignedIn() && resource.data.customerId == request.auth.uid);
       allow delete: if isAdmin();
     }

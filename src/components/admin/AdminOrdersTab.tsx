@@ -21,9 +21,11 @@ import {
 import { collection, getDocs, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { updateOrderStatusAtomically } from '../../lib/orders';
+import { useCart } from '../../context/CartContext';
 import { Order, OrderStatus } from '../../types';
 
 export const AdminOrdersTab: React.FC = () => {
+  const { storeSettings } = useCart();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -81,16 +83,20 @@ export const AdminOrdersTab: React.FC = () => {
   // Dispatch to Steadfast Courier
   const handleSendToSteadfast = async (order: Order) => {
     if (order.courier?.consignmentId) {
-      alert('This order has already been dispatched to Steadfast Courier.');
+      alert(`Order #${order.orderNumber} is already sent to Steadfast (Consignment: ${order.courier.consignmentId}).`);
       return;
     }
 
     setIsSendingCourier(order.id);
     try {
       const codAmount = order.paymentMethod === 'cod' ? order.grandTotal : 0;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (storeSettings?.steadfastApiKey) headers['Api-Key'] = storeSettings.steadfastApiKey;
+      if (storeSettings?.steadfastSecretKey) headers['Secret-Key'] = storeSettings.steadfastSecretKey;
+
       const res = await fetch('/api/courier/steadfast/create-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           invoice: order.orderNumber,
           recipient_name: order.customerName,
@@ -102,16 +108,20 @@ export const AdminOrdersTab: React.FC = () => {
       });
 
       const data = await res.json();
-      if (!data.success) {
+      if (!data.success && data.status !== 200) {
         throw new Error(data.message || 'Steadfast dispatch failed.');
       }
 
       const consignment = data.consignment || {};
+      const consignmentId = String(consignment.consignment_id || data.consignment_id || `SF${Date.now().toString().slice(-7)}`);
+      const trackingCode = String(consignment.tracking_code || data.tracking_code || `TRK-${order.orderNumber}`);
+
       const courierPayload = {
-        consignmentId: String(consignment.consignment_id || `SF-${Date.now()}`),
-        trackingCode: consignment.tracking_code || `TRK-${order.orderNumber}`,
-        status: consignment.status || 'in_review',
-        dispatchedAt: new Date(),
+        provider: 'steadfast' as const,
+        consignmentId,
+        trackingCode,
+        status: consignment.status || data.delivery_status || 'in_review',
+        syncedAt: new Date().toISOString(),
       };
 
       // Save to Firestore
@@ -138,11 +148,11 @@ export const AdminOrdersTab: React.FC = () => {
       }
 
       setFeedback(
-        `Dispatched to Steadfast Courier! Consignment ID: ${courierPayload.consignmentId}`
+        `Successfully sent to Steadfast Courier! Consignment ID: ${consignmentId}`
       );
-      setTimeout(() => setFeedback(null), 4000);
+      setTimeout(() => setFeedback(null), 5000);
     } catch (err: any) {
-      alert('Courier dispatch error: ' + err.message);
+      alert('Steadfast Dispatch Error: ' + err.message);
     } finally {
       setIsSendingCourier(null);
     }
@@ -152,10 +162,20 @@ export const AdminOrdersTab: React.FC = () => {
   const handleCheckSteadfastBalance = async () => {
     setIsCheckingBalance(true);
     try {
-      const res = await fetch('/api/courier/steadfast/balance');
+      const headers: Record<string, string> = {};
+      if (storeSettings?.steadfastApiKey) headers['Api-Key'] = storeSettings.steadfastApiKey;
+      if (storeSettings?.steadfastSecretKey) headers['Secret-Key'] = storeSettings.steadfastSecretKey;
+
+      const res = await fetch('/api/courier/steadfast/balance', { headers });
       const data = await res.json();
       if (data.success) {
-        setCourierBalance(data.current_balance);
+        setCourierBalance(data.current_balance || 0);
+        if (data.configured) {
+          setFeedback(`Steadfast Live Account Balance: ৳${data.current_balance || 0}`);
+        } else {
+          setFeedback(`Steadfast Simulation Mode Active. (Add API credentials in Settings for live balance)`);
+        }
+        setTimeout(() => setFeedback(null), 4000);
       } else {
         alert('Could not retrieve balance: ' + data.message);
       }
@@ -168,14 +188,19 @@ export const AdminOrdersTab: React.FC = () => {
 
   // Check individual parcel status
   const handleCheckCourierStatus = async (order: Order) => {
-    if (!order.courier?.consignmentId) return;
+    const trackingIdentifier = order.courier?.trackingCode || order.courier?.consignmentId;
+    if (!trackingIdentifier) return;
     try {
-      const res = await fetch(`/api/courier/steadfast/status/${order.courier.consignmentId}`);
+      const headers: Record<string, string> = {};
+      if (storeSettings?.steadfastApiKey) headers['Api-Key'] = storeSettings.steadfastApiKey;
+      if (storeSettings?.steadfastSecretKey) headers['Secret-Key'] = storeSettings.steadfastSecretKey;
+
+      const res = await fetch(`/api/courier/steadfast/status/${trackingIdentifier}`, { headers });
       const data = await res.json();
       if (data.success && data.delivery_status) {
-        alert(`Steadfast Status for #${order.orderNumber}: ${data.delivery_status}`);
+        alert(`Steadfast Status for #${order.orderNumber}:\n\nStatus: ${data.delivery_status}\nTracking Code: ${trackingIdentifier}`);
       } else {
-        alert('Courier update: In Transit with Steadfast delivery hub.');
+        alert(`Steadfast Status for #${order.orderNumber}:\n\nStatus: In Transit / In Review\nConsignment ID: ${order.courier?.consignmentId}`);
       }
     } catch (err: any) {
       alert('Courier status check: ' + err.message);

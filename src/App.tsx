@@ -57,6 +57,7 @@ function StorefrontApp() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authDefaultTab, setAuthDefaultTab] = useState<'login' | 'register' | 'forgot' | 'admin'>('login');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [resumeCheckoutAfterAuth, setResumeCheckoutAfterAuth] = useState(false);
   const [isOrderSuccessOpen, setIsOrderSuccessOpen] = useState(false);
   const [successOrderInfo, setSuccessOrderInfo] = useState<{ orderId: string; orderNumber: string } | null>(null);
   const [isTrackingOpen, setIsTrackingOpen] = useState(false);
@@ -145,6 +146,7 @@ function StorefrontApp() {
 
   const handleRequireLogin = () => {
     setIsCheckoutOpen(false);
+    setResumeCheckoutAfterAuth(true);
     setAuthDefaultTab('login');
     setIsAuthOpen(true);
   };
@@ -361,9 +363,18 @@ function StorefrontApp() {
       {/* Authentication Modal */}
       <AuthModal
         isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
+        onClose={() => {
+          setIsAuthOpen(false);
+          setResumeCheckoutAfterAuth(false);
+        }}
         initialTab={authDefaultTab}
         onOpenAdmin={() => setIsAdminView(true)}
+        onSuccess={() => {
+          if (resumeCheckoutAfterAuth) {
+            setResumeCheckoutAfterAuth(false);
+            setIsCheckoutOpen(true);
+          }
+        }}
       />
 
       {/* Checkout Modal */}

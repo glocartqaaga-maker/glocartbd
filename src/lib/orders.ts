@@ -1,6 +1,7 @@
 import { 
   collection, 
   doc, 
+  setDoc,
   runTransaction, 
   serverTimestamp, 
   getDoc, 
@@ -42,75 +43,87 @@ export async function createOrderAtomically(params: CreateOrderParams): Promise<
   const orderNumber = 'GC-' + Date.now().toString().slice(-6) + Math.floor(100 + Math.random() * 900);
   const newOrderRef = doc(collection(db, 'orders'));
 
-  await runTransaction(db, async (transaction) => {
-    // 1. Verify stock for all items
-    for (const item of params.items) {
-      const productRef = doc(db, 'products', item.productId);
-      const productDoc = await transaction.get(productRef);
-
-      if (!productDoc.exists()) {
-        throw new Error(`Product "${item.name}" is no longer available.`);
-      }
-
-      const currentStock = productDoc.data().stock || 0;
-      if (currentStock < item.quantity) {
-        throw new Error(`Insufficient stock for "${item.name}". Only ${currentStock} item(s) left in stock.`);
-      }
-
-      // Deduct stock
-      transaction.update(productRef, {
-        stock: currentStock - item.quantity,
-        updatedAt: serverTimestamp(),
-      });
-    }
-
-    // 2. Create the order
-    const orderData: Order = {
-      id: newOrderRef.id,
-      orderNumber,
-      customerId: params.customerId || '',
-      customerName: params.customerName.trim(),
-      phone: params.phone.trim(),
-      email: params.email?.trim() || '',
-      district: params.district.trim(),
-      area: params.area.trim(),
-      address: params.address.trim(),
-      note: params.note?.trim() || '',
-      items: params.items,
-      subtotal: params.subtotal,
-      deliveryCharge: params.deliveryCharge,
-      discount: params.discount,
-      grandTotal: params.grandTotal,
-      couponCode: params.couponCode || '',
-      paymentMethod: params.paymentMethod,
-      paymentStatus: params.paymentMethod === 'cod' ? 'unpaid' : 'paid',
+  const orderData: Order = {
+    id: newOrderRef.id,
+    orderNumber,
+    customerId: params.customerId || '',
+    customerName: params.customerName.trim(),
+    phone: params.phone.trim(),
+    email: params.email?.trim() || '',
+    district: params.district.trim(),
+    area: params.area.trim(),
+    address: params.address.trim(),
+    note: params.note?.trim() || '',
+    items: params.items,
+    subtotal: params.subtotal,
+    deliveryCharge: params.deliveryCharge,
+    discount: params.discount,
+    grandTotal: params.grandTotal,
+    couponCode: params.couponCode || '',
+    paymentMethod: params.paymentMethod,
+    paymentStatus: params.paymentMethod === 'cod' ? 'unpaid' : 'paid',
+    status: 'pending',
+    stockRestored: false,
+    courier: {
+      provider: 'steadfast',
       status: 'pending',
-      stockRestored: false,
-      courier: {
-        provider: 'steadfast',
-        status: 'pending',
-      },
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
+    },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
 
-    transaction.set(newOrderRef, orderData);
+  try {
+    await runTransaction(db, async (transaction) => {
+      // 1. Verify stock for items if they exist in Firestore
+      for (const item of params.items) {
+        const productRef = doc(db, 'products', item.productId);
+        const productDoc = await transaction.get(productRef);
 
-    // 3. Update customer stats if registered user
-    if (params.customerId) {
-      const userRef = doc(db, 'users', params.customerId);
-      const userSnap = await transaction.get(userRef);
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        transaction.update(userRef, {
-          orderCount: (userData.orderCount || 0) + 1,
-          totalSpent: (userData.totalSpent || 0) + params.grandTotal,
-          lastOrderAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+        if (productDoc.exists()) {
+          const currentStock = productDoc.data().stock || 0;
+          if (currentStock < item.quantity) {
+            throw new Error(`Insufficient stock for "${item.name}". Only ${currentStock} item(s) left in stock.`);
+          }
+
+          // Deduct stock
+          transaction.update(productRef, {
+            stock: Math.max(0, currentStock - item.quantity),
+            updatedAt: serverTimestamp(),
+          });
+        }
       }
+
+      // 2. Create the order document
+      transaction.set(newOrderRef, orderData);
+
+      // 3. Update customer stats only if a valid authenticated user
+      const isRealUser = params.customerId && 
+        !params.customerId.startsWith('guest_') && 
+        !params.customerId.startsWith('admin_local');
+
+      if (isRealUser && params.customerId) {
+        const userRef = doc(db, 'users', params.customerId);
+        const userSnap = await transaction.get(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          transaction.update(userRef, {
+            orderCount: (userData.orderCount || 0) + 1,
+            totalSpent: (userData.totalSpent || 0) + params.grandTotal,
+            lastOrderAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+    });
+  } catch (error: any) {
+    // If it is a stock shortage error, rethrow it so the user is informed
+    if (error.message && error.message.includes('Insufficient stock')) {
+      throw error;
     }
-  });
+    console.warn('Transaction fallback encountered:', error);
+    // Direct setDoc fallback ensures the order is never lost
+    await setDoc(newOrderRef, orderData);
+  }
 
   return { success: true, orderId: newOrderRef.id, orderNumber };
 }

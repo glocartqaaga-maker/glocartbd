@@ -299,12 +299,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLocalAdmin(true);
       }
       await fetchUserProfile(result.user);
+      return result.user;
     } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        const msg = err.message || 'Google sign-in could not be completed.';
-        setError(msg);
-        throw new Error(msg);
+      if (err.code === 'auth/popup-closed-by-user') {
+        return null;
       }
+      let friendly = 'Google sign-in could not be completed.';
+      if (err.code === 'auth/popup-blocked') {
+        friendly = 'Pop-up window was blocked by your browser. Please allow popups or complete your order directly.';
+      } else if (err.code === 'auth/unauthorized-domain') {
+        friendly = 'Google sign-in domain authorization notice. You can place your order directly with your mobile number.';
+      } else if (err.message) {
+        friendly = err.message;
+      }
+      setError(friendly);
+      throw new Error(friendly);
     }
   };
 

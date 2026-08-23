@@ -79,14 +79,22 @@ export const AdminSettingsTab: React.FC = () => {
     setIsTestingCourier(true);
     setCourierStatusMsg(null);
     try {
-      const res = await fetch('/api/courier/steadfast/balance');
+      const headers: Record<string, string> = {};
+      if (settings.steadfastApiKey) headers['Api-Key'] = settings.steadfastApiKey;
+      if (settings.steadfastSecretKey) headers['Secret-Key'] = settings.steadfastSecretKey;
+
+      const res = await fetch('/api/courier/steadfast/balance', { headers });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.configured) {
         setCourierStatusMsg(
-          `Steadfast Courier API is connected successfully! Balance: ৳${data.current_balance}`
+          `Steadfast Courier Connected Live! Current Balance: ৳${data.current_balance || 0}`
+        );
+      } else if (data.success && !data.configured) {
+        setCourierStatusMsg(
+          `Steadfast Simulation Mode is Active. Add your Api-Key & Secret-Key above to connect live account.`
         );
       } else {
-        setCourierStatusMsg(`Steadfast: ${data.message || 'Ready for real dispatch'}`);
+        setCourierStatusMsg(`Steadfast Notice: ${data.message || 'Could not verify connection'}`);
       }
     } catch (err: any) {
       setCourierStatusMsg('Steadfast API endpoint is online and ready.');
@@ -318,7 +326,7 @@ export const AdminSettingsTab: React.FC = () => {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
               <Key className="w-4 h-4 text-amber-600" />
-              4. Steadfast Courier Integration Status
+              4. Steadfast Courier Integration & API Credentials
             </h3>
 
             <button
@@ -328,19 +336,49 @@ export const AdminSettingsTab: React.FC = () => {
               className="px-3 py-1.5 bg-stone-900 hover:bg-black text-amber-400 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors"
             >
               {isTestingCourier ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
-              <span>Test Courier API</span>
+              <span>Test Steadfast API</span>
             </button>
           </div>
 
           <p className="text-xs text-stone-500">
-            GloCart BD server proxies Steadfast Courier requests securely using the environment keys{' '}
-            <code className="bg-stone-100 px-1 py-0.5 rounded-sm font-mono text-[11px]">STEADFAST_API_KEY</code> and{' '}
-            <code className="bg-stone-100 px-1 py-0.5 rounded-sm font-mono text-[11px]">STEADFAST_SECRET_KEY</code>.
+            Enter your Steadfast Courier Merchant API Key and Secret Key to dispatch parcels directly to Steadfast Courier.
           </p>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1">
+                Steadfast API Key
+              </label>
+              <input
+                type="text"
+                value={settings.steadfastApiKey || ''}
+                onChange={(e) => handleChange('steadfastApiKey', e.target.value.trim())}
+                placeholder="Enter Steadfast Api-Key"
+                className="w-full px-3 py-2 bg-stone-50 border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1">
+                Steadfast Secret Key
+              </label>
+              <input
+                type="password"
+                value={settings.steadfastSecretKey || ''}
+                onChange={(e) => handleChange('steadfastSecretKey', e.target.value.trim())}
+                placeholder="Enter Steadfast Secret-Key"
+                className="w-full px-3 py-2 bg-stone-50 border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden font-mono"
+              />
+            </div>
+          </div>
+
           {courierStatusMsg && (
-            <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl text-xs text-sky-900 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-sky-600 shrink-0" />
+            <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+              courierStatusMsg.includes('success') || courierStatusMsg.includes('connected') || courierStatusMsg.includes('Balance')
+                ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
+                : 'bg-sky-50 border border-sky-200 text-sky-900'
+            }`}>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>{courierStatusMsg}</span>
             </div>
           )}
