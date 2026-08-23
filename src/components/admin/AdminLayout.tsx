@@ -141,7 +141,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               <p className="text-[10px] text-stone-500 truncate">{userProfile?.email || 'admin@glocartbd.com'}</p>
             </div>
             <button
-              onClick={logout}
+              onClick={() => {
+                logout();
+                onExitAdmin();
+              }}
               className="p-1.5 text-stone-400 hover:text-rose-400 rounded-lg transition-colors"
               title="Sign Out"
             >

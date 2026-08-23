@@ -55,7 +55,7 @@ function StorefrontApp() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [authDefaultTab, setAuthDefaultTab] = useState<'login' | 'register'>('login');
+  const [authDefaultTab, setAuthDefaultTab] = useState<'login' | 'register' | 'forgot' | 'admin'>('login');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isOrderSuccessOpen, setIsOrderSuccessOpen] = useState(false);
   const [successOrderInfo, setSuccessOrderInfo] = useState<{ orderId: string; orderNumber: string } | null>(null);
@@ -167,12 +167,14 @@ function StorefrontApp() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onOpenCart={() => setIsCartOpen(true)}
-        onOpenAuth={(tab) => {
+        onOpenAuth={(tab = 'login') => {
           setAuthDefaultTab(tab);
           setIsAuthOpen(true);
         }}
         onOpenProfile={() => setIsProfileOpen(true)}
         onOpenAdmin={() => setIsAdminView(true)}
+        onToggleAdmin={() => setIsAdminView(!isAdminView)}
+        isAdminView={isAdminView}
         onOpenTracking={() => handleOpenTrackingModal()}
       />
 
@@ -320,6 +322,14 @@ function StorefrontApp() {
           setSelectedCategory(catId);
           scrollToProducts();
         }}
+        onOpenAdmin={() => {
+          if (isAdmin) {
+            setIsAdminView(true);
+          } else {
+            setAuthDefaultTab('admin');
+            setIsAuthOpen(true);
+          }
+        }}
       />
 
       {/* MODALS */}
@@ -352,7 +362,8 @@ function StorefrontApp() {
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
-        defaultTab={authDefaultTab}
+        initialTab={authDefaultTab}
+        onOpenAdmin={() => setIsAdminView(true)}
       />
 
       {/* Checkout Modal */}

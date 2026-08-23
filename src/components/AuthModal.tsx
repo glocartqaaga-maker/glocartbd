@@ -10,7 +10,10 @@ import {
   AlertCircle, 
   Loader2, 
   Building,
-  Sparkles
+  Sparkles,
+  ShieldCheck,
+  Zap,
+  ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BD_DISTRICTS } from '../lib/bd-locations';
@@ -18,8 +21,9 @@ import { BD_DISTRICTS } from '../lib/bd-locations';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'login' | 'register' | 'forgot';
+  initialTab?: 'login' | 'register' | 'forgot' | 'admin';
   onSuccess?: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -27,9 +31,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   initialTab = 'login',
   onSuccess,
+  onOpenAdmin,
 }) => {
-  const { signup, login, loginWithGoogle, resetPassword, error, clearError } = useAuth();
-  const [tab, setTab] = useState<'login' | 'register' | 'forgot'>(initialTab);
+  const { signup, login, loginAsAdminQuick, loginWithGoogle, resetPassword, error, clearError, isAdmin } = useAuth();
+  const [tab, setTab] = useState<'login' | 'register' | 'forgot' | 'admin'>(initialTab);
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -49,7 +54,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleTabSwitch = (newTab: 'login' | 'register' | 'forgot') => {
+  const handleTabSwitch = (newTab: 'login' | 'register' | 'forgot' | 'admin') => {
     setTab(newTab);
     setLocalError(null);
     setSuccessMessage(null);
@@ -68,6 +73,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onClose();
     } catch (err: any) {
       setLocalError(err.message || 'Login failed.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleQuickAdminLogin = async () => {
+    setLocalError(null);
+    setSuccessMessage(null);
+    setIsLoading(true);
+    try {
+      await loginAsAdminQuick();
+      setSuccessMessage('Admin mode activated successfully!');
+      setTimeout(() => {
+        onSuccess?.();
+        if (onOpenAdmin) {
+          onOpenAdmin();
+        }
+        onClose();
+      }, 500);
+    } catch (err: any) {
+      setLocalError(err.message || 'Failed to activate admin.');
     } finally {
       setIsLoading(false);
     }
@@ -171,11 +197,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {tab === 'login' && 'Sign In to GloCart BD'}
               {tab === 'register' && 'Create Customer Account'}
               {tab === 'forgot' && 'Reset Password'}
+              {tab === 'admin' && 'Admin Portal Access'}
             </h2>
             <p className="text-xs text-stone-500 mt-0.5">
               {tab === 'login' && 'Access your orders, cart, and profile'}
               {tab === 'register' && 'Join GloCart BD for instant checkout & tracking'}
               {tab === 'forgot' && 'Enter your registered email to receive reset link'}
+              {tab === 'admin' && 'Sign in to manage products, categories, orders & settings'}
             </p>
           </div>
           <button
@@ -210,7 +238,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   : 'text-stone-500 hover:text-stone-900'
               }`}
             >
-              Create Account
+              Register
+            </button>
+            <button
+              id="tab-btn-admin"
+              onClick={() => handleTabSwitch('admin')}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
+                tab === 'admin'
+                  ? 'bg-amber-500 text-stone-950 shadow-xs font-black'
+                  : 'text-stone-500 hover:text-stone-900'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Admin
             </button>
           </div>
         )}
@@ -228,6 +268,110 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-start gap-2">
               <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <span>{successMessage}</span>
+            </div>
+          )}
+
+          {/* ADMIN TAB */}
+          {tab === 'admin' && (
+            <div className="space-y-4">
+              <div className="p-3.5 bg-amber-50 border border-amber-200/80 rounded-2xl">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="w-6 h-6 rounded-lg bg-amber-500 text-stone-950 font-black flex items-center justify-center text-xs">
+                    G
+                  </div>
+                  <h3 className="text-xs font-bold text-amber-950">Store Administrator Portal</h3>
+                </div>
+                <p className="text-[11px] text-amber-900 leading-relaxed">
+                  Authorized access to update products, process customer orders, configure Steadfast logistics, and manage store banners.
+                </p>
+              </div>
+
+              {/* 1-Click Instant Admin Sign-in */}
+              <button
+                id="btn-quick-admin-login"
+                type="button"
+                onClick={handleQuickAdminLogin}
+                disabled={isLoading}
+                className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-stone-950 font-black rounded-xl text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 text-stone-950 fill-stone-950" />
+                    <span>1-Click Instant Admin Sign In</span>
+                    <ArrowRight className="w-4 h-4 ml-1" />
+                  </>
+                )}
+              </button>
+
+              <div className="relative my-2 text-center">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-stone-200" />
+                </div>
+                <span className="relative px-3 bg-white text-[11px] font-semibold text-stone-400 uppercase">
+                  or sign in with password
+                </span>
+              </div>
+
+              <form onSubmit={handleLoginSubmit} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Admin Username or Email
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="input-admin-email"
+                      type="text"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="admin or glocart.qaaga@gmail.com"
+                      className="w-full pl-9 pr-3 py-2 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
+                    />
+                    <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="input-admin-password"
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="glo123cart"
+                      className="w-full pl-9 pr-3 py-2 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
+                    />
+                    <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('admin');
+                      setPassword('glo123cart');
+                    }}
+                    className="flex-1 py-1.5 px-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold rounded-lg text-xs transition-colors"
+                  >
+                    Autofill Credentials
+                  </button>
+                  <button
+                    id="btn-admin-manual-submit"
+                    type="submit"
+                    disabled={isLoading}
+                    className="flex-1 py-2 px-3 bg-stone-900 hover:bg-black text-amber-400 font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Log In'}
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 

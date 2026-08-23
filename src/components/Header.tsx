@@ -22,11 +22,13 @@ interface HeaderProps {
   onSelectCategory: (categoryId: string) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  onOpenAuth: (initialTab?: 'login' | 'register') => void;
+  onOpenAuth: (initialTab?: 'login' | 'register' | 'admin') => void;
   onOpenProfile: () => void;
   onOpenTracking: () => void;
-  onToggleAdmin: () => void;
-  isAdminView: boolean;
+  onOpenCart?: () => void;
+  onOpenAdmin?: () => void;
+  onToggleAdmin?: () => void;
+  isAdminView?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,13 +40,23 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuth,
   onOpenProfile,
   onOpenTracking,
+  onOpenCart,
+  onOpenAdmin,
   onToggleAdmin,
-  isAdminView,
+  isAdminView = false,
 }) => {
   const { currentUser, userProfile, isAdmin, logout } = useAuth();
   const { totalItems, setIsCartOpen, storeSettings } = useCart();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+
+  const handleAdminClick = () => {
+    if (typeof onToggleAdmin === 'function') {
+      onToggleAdmin();
+    } else if (typeof onOpenAdmin === 'function') {
+      onOpenAdmin();
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs">
@@ -135,10 +147,10 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* Admin Dashboard Switch Button */}
-            {isAdmin && (
+            {isAdmin ? (
               <button
                 id="btn-admin-portal-switch"
-                onClick={onToggleAdmin}
+                onClick={handleAdminClick}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all shadow-xs ${
                   isAdminView
                     ? 'bg-amber-600 text-white shadow-amber-600/30'
@@ -147,6 +159,16 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span className="hidden sm:inline">{isAdminView ? 'Storefront' : 'Admin Panel'}</span>
+              </button>
+            ) : (
+              <button
+                id="btn-admin-quick-header"
+                onClick={() => onOpenAuth('admin')}
+                className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
+                title="Store Administrator Portal"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                <span>Admin</span>
               </button>
             )}
 
@@ -219,7 +241,7 @@ export const Header: React.FC<HeaderProps> = ({
                       id="btn-dropdown-admin"
                       onClick={() => {
                         setIsAccountMenuOpen(false);
-                        onToggleAdmin();
+                        handleAdminClick();
                       }}
                       className="w-full text-left px-4 py-2.5 text-xs text-amber-700 hover:bg-amber-50 flex items-center gap-2 font-semibold border-t border-stone-100"
                     >
@@ -350,6 +372,18 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   My Profile & Orders
                 </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleAdminClick();
+                    }}
+                    className="w-full text-left py-2 text-sm font-semibold text-amber-700 flex items-center gap-2"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-amber-600" />
+                    Admin Panel
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setIsMobileMenuOpen(false);
@@ -361,24 +395,36 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               </>
             ) : (
-              <div className="flex gap-2 pt-1">
+              <div className="space-y-2">
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      onOpenAuth('login');
+                    }}
+                    className="flex-1 py-2 text-xs font-bold bg-amber-500 text-stone-950 rounded-lg text-center"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      onOpenAuth('register');
+                    }}
+                    className="flex-1 py-2 text-xs font-bold bg-stone-100 text-stone-800 rounded-lg text-center"
+                  >
+                    Register
+                  </button>
+                </div>
                 <button
                   onClick={() => {
                     setIsMobileMenuOpen(false);
-                    onOpenAuth('login');
+                    onOpenAuth('admin');
                   }}
-                  className="flex-1 py-2 text-xs font-bold bg-amber-500 text-stone-950 rounded-lg text-center"
+                  className="w-full py-2 text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg text-center flex items-center justify-center gap-1.5"
                 >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    onOpenAuth('register');
-                  }}
-                  className="flex-1 py-2 text-xs font-bold bg-stone-100 text-stone-800 rounded-lg text-center"
-                >
-                  Register
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                  Admin Login
                 </button>
               </div>
             )}

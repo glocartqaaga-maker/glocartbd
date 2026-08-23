@@ -16,9 +16,10 @@ import { useCart } from '../context/CartContext';
 interface FooterProps {
   onOpenTracking: () => void;
   onSelectCategory: (categoryId: string) => void;
+  onOpenAdmin?: () => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory }) => {
+export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory, onOpenAdmin }) => {
   const { storeSettings } = useCart();
 
   return (
@@ -164,9 +165,18 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory
         {/* Bottom copyright */}
         <div className="pt-8 border-t border-stone-800 flex items-center justify-between flex-wrap gap-4 text-xs text-stone-500">
           <p>© {new Date().getFullYear()} {storeSettings.storeName}. All rights reserved.</p>
-          <p className="flex items-center gap-2">
-            <span>Powered by Firebase & Steadfast Courier</span>
-          </p>
+          <div className="flex items-center gap-4">
+            <span className="text-stone-400">Steadfast Courier Delivery 64 Districts</span>
+            {onOpenAdmin && (
+              <button
+                id="btn-footer-admin-portal"
+                onClick={onOpenAdmin}
+                className="text-stone-400 hover:text-amber-400 underline transition-colors"
+              >
+                Admin Portal
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </footer>
