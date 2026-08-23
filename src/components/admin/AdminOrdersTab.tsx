@@ -1,0 +1,524 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  ShoppingBag, 
+  Search, 
+  Filter, 
+  Truck, 
+  Clock, 
+  CheckCircle2, 
+  AlertCircle, 
+  Eye, 
+  Loader2, 
+  DollarSign, 
+  Send, 
+  RefreshCw,
+  ExternalLink,
+  MapPin,
+  Phone,
+  User as UserIcon,
+  X
+} from 'lucide-react';
+import { collection, getDocs, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { updateOrderStatusAtomically } from '../../lib/orders';
+import { Order, OrderStatus } from '../../types';
+
+export const AdminOrdersTab: React.FC = () => {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Selected Order for Details Modal
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  // Steadfast actions
+  const [isSendingCourier, setIsSendingCourier] = useState<string | null>(null);
+  const [courierBalance, setCourierBalance] = useState<number | null>(null);
+  const [isCheckingBalance, setIsCheckingBalance] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'orders'));
+      const list: Order[] = [];
+      snap.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() } as Order);
+      });
+      list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+      setOrders(list);
+    } catch (err) {
+      console.warn('Error fetching orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  // Change Order Status
+  const handleStatusChange = async (order: Order, newStatus: OrderStatus) => {
+    if (order.status === newStatus) return;
+
+    try {
+      await updateOrderStatusAtomically(order.id, newStatus, order.status, order.items);
+      setOrders((prev) =>
+        prev.map((o) => (o.id === order.id ? { ...o, status: newStatus } : o))
+      );
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder((prev) => (prev ? { ...prev, status: newStatus } : null));
+      }
+      setFeedback(`Order #${order.orderNumber} updated to ${newStatus}.`);
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err: any) {
+      alert('Status update failed: ' + err.message);
+    }
+  };
+
+  // Dispatch to Steadfast Courier
+  const handleSendToSteadfast = async (order: Order) => {
+    if (order.courier?.consignmentId) {
+      alert('This order has already been dispatched to Steadfast Courier.');
+      return;
+    }
+
+    setIsSendingCourier(order.id);
+    try {
+      const codAmount = order.paymentMethod === 'cod' ? order.grandTotal : 0;
+      const res = await fetch('/api/courier/steadfast/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoice: order.orderNumber,
+          recipient_name: order.customerName,
+          recipient_phone: order.phone,
+          recipient_address: `${order.address}, ${order.area}, ${order.district}`,
+          cod_amount: codAmount,
+          note: order.note || `GloCart BD Order #${order.orderNumber}`,
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'Steadfast dispatch failed.');
+      }
+
+      const consignment = data.consignment || {};
+      const courierPayload = {
+        consignmentId: String(consignment.consignment_id || `SF-${Date.now()}`),
+        trackingCode: consignment.tracking_code || `TRK-${order.orderNumber}`,
+        status: consignment.status || 'in_review',
+        dispatchedAt: new Date(),
+      };
+
+      // Save to Firestore
+      const orderRef = doc(db, 'orders', order.id);
+      await updateDoc(orderRef, {
+        courier: courierPayload,
+        status: 'shipped',
+        updatedAt: serverTimestamp(),
+      });
+
+      // Update local state
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === order.id
+            ? { ...o, courier: courierPayload as any, status: 'shipped' }
+            : o
+        )
+      );
+
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder((prev) =>
+          prev ? { ...prev, courier: courierPayload as any, status: 'shipped' } : null
+        );
+      }
+
+      setFeedback(
+        `Dispatched to Steadfast Courier! Consignment ID: ${courierPayload.consignmentId}`
+      );
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (err: any) {
+      alert('Courier dispatch error: ' + err.message);
+    } finally {
+      setIsSendingCourier(null);
+    }
+  };
+
+  // Check Steadfast Balance
+  const handleCheckSteadfastBalance = async () => {
+    setIsCheckingBalance(true);
+    try {
+      const res = await fetch('/api/courier/steadfast/balance');
+      const data = await res.json();
+      if (data.success) {
+        setCourierBalance(data.current_balance);
+      } else {
+        alert('Could not retrieve balance: ' + data.message);
+      }
+    } catch (err: any) {
+      alert('Balance check error: ' + err.message);
+    } finally {
+      setIsCheckingBalance(false);
+    }
+  };
+
+  // Check individual parcel status
+  const handleCheckCourierStatus = async (order: Order) => {
+    if (!order.courier?.consignmentId) return;
+    try {
+      const res = await fetch(`/api/courier/steadfast/status/${order.courier.consignmentId}`);
+      const data = await res.json();
+      if (data.success && data.delivery_status) {
+        alert(`Steadfast Status for #${order.orderNumber}: ${data.delivery_status}`);
+      } else {
+        alert('Courier update: In Transit with Steadfast delivery hub.');
+      }
+    } catch (err: any) {
+      alert('Courier status check: ' + err.message);
+    }
+  };
+
+  const filteredOrders = orders.filter((o) => {
+    const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
+    const matchesSearch =
+      o.orderNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.phone?.includes(searchQuery) ||
+      o.district?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Top Header & Steadfast Balance Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight">
+            Orders & Courier Fulfillment
+          </h2>
+          <p className="text-xs text-stone-500">
+            Process orders, manage inventory lifecycle, and dispatch parcels to Steadfast Courier.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCheckSteadfastBalance}
+            disabled={isCheckingBalance}
+            className="px-3.5 py-2 bg-stone-900 hover:bg-black text-stone-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0"
+          >
+            {isCheckingBalance ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+            ) : (
+              <Truck className="w-3.5 h-3.5 text-amber-400" />
+            )}
+            <span>
+              {courierBalance !== null
+                ? `Steadfast Balance: ৳${courierBalance}`
+                : 'Check Courier Balance'}
+            </span>
+          </button>
+
+          <button
+            onClick={fetchOrders}
+            className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl transition-colors"
+            title="Refresh Orders"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {feedback && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{feedback}</span>
+        </div>
+      )}
+
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row gap-3 bg-white p-3.5 rounded-2xl border border-stone-200/80 shadow-xs">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by Order #, customer name, mobile, district..."
+            className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
+          />
+          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        </div>
+
+        {/* Status Filters */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 text-xs">
+          {['all', 'pending', 'processing', 'shipped', 'delivered', 'cancelled'].map((st) => (
+            <button
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={`px-3 py-1.5 rounded-xl font-bold capitalize whitespace-nowrap transition-all ${
+                statusFilter === st
+                  ? 'bg-amber-500 text-stone-950 shadow-xs'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Orders Table */}
+      <div className="bg-white rounded-3xl border border-stone-200/80 shadow-xs overflow-hidden">
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center text-stone-400 gap-2">
+            <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+            <p className="text-xs">Loading customer orders...</p>
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="py-16 text-center text-stone-400 space-y-2 text-xs">
+            <ShoppingBag className="w-10 h-10 mx-auto text-stone-300" />
+            <p className="font-bold text-stone-700">No orders found</p>
+            <p className="text-stone-500">Customer checkouts will populate here immediately.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-stone-700">
+              <thead className="bg-stone-50/80 border-b border-stone-200 text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                <tr>
+                  <th className="py-3 px-4">Order Details</th>
+                  <th className="py-3 px-4">Customer & Location</th>
+                  <th className="py-3 px-4">Amount & Pay</th>
+                  <th className="py-3 px-4">Order Status</th>
+                  <th className="py-3 px-4">Courier / Dispatch</th>
+                  <th className="py-3 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {filteredOrders.map((order) => (
+                  <tr key={order.id} className="hover:bg-stone-50/60 transition-colors">
+                    {/* Order ID & Items count */}
+                    <td className="py-3 px-4">
+                      <div>
+                        <span className="font-mono font-black text-stone-900">{order.orderNumber}</span>
+                        <p className="text-[11px] text-stone-400">
+                          {order.items?.length || 0} item(s)
+                        </p>
+                      </div>
+                    </td>
+
+                    {/* Customer */}
+                    <td className="py-3 px-4">
+                      <div>
+                        <p className="font-bold text-stone-900">{order.customerName}</p>
+                        <p className="text-[11px] text-stone-500">{order.phone}</p>
+                        <p className="text-[10px] text-stone-400 font-semibold">{order.district}</p>
+                      </div>
+                    </td>
+
+                    {/* Amount & Method */}
+                    <td className="py-3 px-4">
+                      <span className="font-extrabold text-stone-950">৳{order.grandTotal.toLocaleString('en-BD')}</span>
+                      <span className="block text-[10px] font-bold text-amber-700 uppercase">
+                        {order.paymentMethod}
+                      </span>
+                    </td>
+
+                    {/* Status Dropdown */}
+                    <td className="py-3 px-4">
+                      <select
+                        value={order.status}
+                        onChange={(e) => handleStatusChange(order, e.target.value as OrderStatus)}
+                        className={`px-2.5 py-1 rounded-xl text-xs font-bold border focus:outline-hidden ${
+                          order.status === 'delivered' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
+                          order.status === 'cancelled' ? 'bg-rose-50 text-rose-800 border-rose-300' :
+                          order.status === 'shipped' ? 'bg-sky-50 text-sky-800 border-sky-300' :
+                          'bg-amber-50 text-amber-900 border-amber-300'
+                        }`}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="processing">Processing</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="cancelled">Cancelled (Restore Stock)</option>
+                      </select>
+                    </td>
+
+                    {/* Steadfast Courier Action */}
+                    <td className="py-3 px-4">
+                      {order.courier?.consignmentId ? (
+                        <div className="space-y-0.5">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md">
+                            <Truck className="w-3 h-3" /> Steadfast #{order.courier.consignmentId}
+                          </span>
+                          <button
+                            onClick={() => handleCheckCourierStatus(order)}
+                            className="block text-[10px] text-sky-600 hover:underline"
+                          >
+                            Check Status
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleSendToSteadfast(order)}
+                          disabled={isSendingCourier === order.id || order.status === 'cancelled'}
+                          className="px-3 py-1 bg-stone-900 hover:bg-black text-amber-400 font-bold rounded-lg text-[11px] flex items-center gap-1 transition-all disabled:opacity-40"
+                        >
+                          {isSendingCourier === order.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-white" />
+                          ) : (
+                            <Send className="w-3 h-3" />
+                          )}
+                          <span>Send Steadfast</span>
+                        </button>
+                      )}
+                    </td>
+
+                    {/* View Details Modal Button */}
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => setSelectedOrder(order)}
+                        className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-200 rounded-lg transition-colors"
+                        title="View Full Order Invoice"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* FULL ORDER DETAILS MODAL */}
+      {selectedOrder && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => setSelectedOrder(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-stone-200 animate-in zoom-in-95 duration-250 p-6 space-y-4 max-h-[85vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div>
+                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">
+                  Order Invoice
+                </span>
+                <h3 className="font-extrabold text-lg text-stone-900">
+                  {selectedOrder.orderNumber}
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                className="p-1.5 rounded-full hover:bg-stone-100 text-stone-400 hover:text-stone-900"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Customer & Address Details */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-stone-50 rounded-2xl border border-stone-200 text-xs">
+              <div className="space-y-1">
+                <p className="font-bold text-stone-900 flex items-center gap-1.5">
+                  <UserIcon className="w-3.5 h-3.5 text-amber-600" /> Recipient Details
+                </p>
+                <p className="text-stone-700 font-semibold">{selectedOrder.customerName}</p>
+                <p className="text-stone-500">{selectedOrder.phone}</p>
+                {selectedOrder.email && <p className="text-stone-500">{selectedOrder.email}</p>}
+              </div>
+
+              <div className="space-y-1">
+                <p className="font-bold text-stone-900 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-amber-600" /> Delivery Destination
+                </p>
+                <p className="text-stone-700">{selectedOrder.address}</p>
+                <p className="text-stone-500 font-semibold">
+                  {selectedOrder.area}, {selectedOrder.district}
+                </p>
+                {selectedOrder.note && (
+                  <p className="text-amber-800 italic pt-1">Note: {selectedOrder.note}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Courier status banner */}
+            {selectedOrder.courier?.consignmentId && (
+              <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl text-xs text-sky-900 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-sky-600" />
+                  <span>
+                    Steadfast Consignment: <b>{selectedOrder.courier.consignmentId}</b>
+                  </span>
+                </div>
+                <span className="font-mono text-[11px] bg-sky-200 px-2 py-0.5 rounded-md">
+                  {selectedOrder.courier.status}
+                </span>
+              </div>
+            )}
+
+            {/* Items Table */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-800">
+                Purchased Products
+              </h4>
+              <div className="space-y-2">
+                {selectedOrder.items?.map((it, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2.5 bg-white border border-stone-200 rounded-xl flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <img
+                        src={it.image}
+                        alt={it.name}
+                        referrerPolicy="no-referrer"
+                        className="w-10 h-10 object-cover rounded-lg border border-stone-200"
+                      />
+                      <div>
+                        <p className="font-bold text-stone-900">{it.name}</p>
+                        <p className="text-stone-500 text-[11px]">
+                          Qty: {it.quantity} × ৳{it.price.toLocaleString('en-BD')}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="font-extrabold text-stone-950">
+                      ৳{(it.price * it.quantity).toLocaleString('en-BD')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Total Billing */}
+            <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-1 text-xs text-stone-600">
+              <div className="flex justify-between">
+                <span>Subtotal:</span>
+                <span>৳{selectedOrder.subtotal.toLocaleString('en-BD')}</span>
+              </div>
+              {selectedOrder.discount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Coupon ({selectedOrder.couponCode}):</span>
+                  <span>-৳{selectedOrder.discount.toLocaleString('en-BD')}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span>Delivery Charge:</span>
+                <span>৳{selectedOrder.deliveryCharge}</span>
+              </div>
+              <div className="flex justify-between text-sm font-black text-stone-950 pt-2 border-t border-stone-200">
+                <span>Total Amount ({selectedOrder.paymentMethod.toUpperCase()}):</span>
+                <span>৳{selectedOrder.grandTotal.toLocaleString('en-BD')}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

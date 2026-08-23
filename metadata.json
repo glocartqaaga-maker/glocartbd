@@ -1,0 +1,6 @@
+{
+  "name": "GloCart BD",
+  "description": "Production-ready full-stack ecommerce platform for Bangladesh with real-time Firestore database, Auth, Admin & Customer portals, and Courier tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

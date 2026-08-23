@@ -1,0 +1,121 @@
+{
+  "version": "1.0",
+  "collections": [
+    {
+      "name": "users",
+      "description": "Customer and Administrator account profiles",
+      "fields": {
+        "uid": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "email": { "type": "string", "required": true },
+        "phone": { "type": "string", "required": true },
+        "district": { "type": "string" },
+        "area": { "type": "string" },
+        "address": { "type": "string" },
+        "role": { "type": "string", "description": "'admin' or 'customer'" },
+        "status": { "type": "string", "description": "'active' or 'suspended'" },
+        "orderCount": { "type": "number" },
+        "totalSpent": { "type": "number" },
+        "lastOrderAt": { "type": "timestamp" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    {
+      "name": "products",
+      "description": "Products catalog with multi-image support",
+      "fields": {
+        "name": { "type": "string", "required": true },
+        "categoryId": { "type": "string", "required": true },
+        "categoryName": { "type": "string" },
+        "price": { "type": "number", "required": true },
+        "oldPrice": { "type": "number" },
+        "stock": { "type": "number", "required": true },
+        "rating": { "type": "number" },
+        "reviews": { "type": "number" },
+        "badge": { "type": "string" },
+        "description": { "type": "string" },
+        "active": { "type": "boolean", "required": true },
+        "primaryImage": { "type": "string" },
+        "images": { "type": "array" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    {
+      "name": "categories",
+      "description": "Product categories",
+      "fields": {
+        "name": { "type": "string", "required": true },
+        "slug": { "type": "string", "required": true },
+        "image": { "type": "string" },
+        "active": { "type": "boolean", "required": true },
+        "sortOrder": { "type": "number" },
+        "createdAt": { "type": "timestamp" }
+      }
+    },
+    {
+      "name": "sliders",
+      "description": "Homepage slider and promo banners",
+      "fields": {
+        "title": { "type": "string", "required": true },
+        "subtitle": { "type": "string" },
+        "image": { "type": "string", "required": true },
+        "buttonText": { "type": "string" },
+        "buttonTarget": { "type": "string" },
+        "active": { "type": "boolean", "required": true },
+        "sortOrder": { "type": "number" },
+        "createdAt": { "type": "timestamp" }
+      }
+    },
+    {
+      "name": "orders",
+      "description": "Customer orders with items and courier tracking",
+      "fields": {
+        "orderNumber": { "type": "string", "required": true },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string", "required": true },
+        "phone": { "type": "string", "required": true },
+        "email": { "type": "string" },
+        "district": { "type": "string", "required": true },
+        "area": { "type": "string", "required": true },
+        "address": { "type": "string", "required": true },
+        "note": { "type": "string" },
+        "items": { "type": "array", "required": true },
+        "subtotal": { "type": "number", "required": true },
+        "deliveryCharge": { "type": "number", "required": true },
+        "discount": { "type": "number" },
+        "grandTotal": { "type": "number", "required": true },
+        "couponCode": { "type": "string" },
+        "paymentMethod": { "type": "string", "required": true },
+        "status": { "type": "string", "description": "pending, processing, shipped, delivered, cancelled" },
+        "stockRestored": { "type": "boolean" },
+        "courier": { "type": "map" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      }
+    },
+    {
+      "name": "settings",
+      "description": "Store configuration and delivery rules",
+      "fields": {
+        "storeName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "facebook": { "type": "string" },
+        "address": { "type": "string" },
+        "promoBar": { "type": "string" },
+        "heroText": { "type": "string" },
+        "homepageBanner": { "type": "string" },
+        "footerDescription": { "type": "string" },
+        "supportHours": { "type": "string" },
+        "deliveryChargeDhaka": { "type": "number" },
+        "deliveryChargeOutside": { "type": "number" },
+        "freeShippingThreshold": { "type": "number" },
+        "couponCode": { "type": "string" },
+        "couponDiscountPercent": { "type": "number" },
+        "lowStockThreshold": { "type": "number" }
+      }
+    }
+  ]
+}
