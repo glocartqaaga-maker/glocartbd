@@ -9,7 +9,9 @@ import {
   Truck, 
   RotateCcw,
   Sparkles,
-  CreditCard
+  CreditCard,
+  ExternalLink,
+  Lock
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
@@ -162,20 +164,24 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory
           </div>
         </div>
 
-        {/* Bottom copyright */}
-        <div className="pt-8 border-t border-stone-800 flex items-center justify-between flex-wrap gap-4 text-xs text-stone-500">
-          <p>© {new Date().getFullYear()} {storeSettings.storeName}. All rights reserved.</p>
-          <div className="flex items-center gap-4">
-            <span className="text-stone-400">Steadfast Courier Delivery 64 Districts</span>
-            {onOpenAdmin && (
-              <button
-                id="btn-footer-admin-portal"
-                onClick={onOpenAdmin}
-                className="text-stone-400 hover:text-amber-400 underline transition-colors"
-              >
-                Admin Portal
-              </button>
-            )}
+        {/* Bottom copyright & Credits */}
+        <div className="pt-8 border-t border-stone-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-stone-400">
+          <div className="text-center md:text-left">
+            <p>© {new Date().getFullYear()} <span className="text-stone-200 font-semibold">{storeSettings.storeName || 'GloCart BD'}</span>. All rights reserved.</p>
+          </div>
+
+          <div className="flex items-center justify-center md:justify-end gap-1.5 text-xs text-stone-400">
+            <span>Design & Developed by</span>
+            <a
+              id="link-footer-developer"
+              href="https://it.qaaga.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-400 hover:text-amber-300 font-bold underline underline-offset-2 flex items-center gap-1 transition-colors"
+            >
+              <span>QAAGA IT</span>
+              <ExternalLink className="w-3 h-3 text-amber-400/80" />
+            </a>
           </div>
         </div>
       </div>

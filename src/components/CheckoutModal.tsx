@@ -84,18 +84,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setErrorMessage(null);
     setIsGoogleLoading(true);
     try {
-      const user = await loginWithGoogle();
-      if (user) {
-        if (user.displayName && !customerName) setCustomerName(user.displayName);
-        if (user.email && !email) setEmail(user.email);
-        if (user.phoneNumber && !phone) setPhone(user.phoneNumber);
-      }
+      await loginWithGoogle({
+        email: email || undefined,
+        name: customerName || undefined,
+      });
     } catch (err: any) {
-      if (err.message === 'GOOGLE_UNAUTHORIZED_DOMAIN' || err.message?.includes('domain')) {
-        setErrorMessage('Google sign-in domain authorization notice: You can place your order directly by filling your mobile number & delivery address below!');
-      } else {
-        setErrorMessage(err.message || 'Google sign-in could not be completed. You can order directly with your phone number.');
-      }
+      setErrorMessage(err.message || 'Google sign-in could not be completed.');
     } finally {
       setIsGoogleLoading(false);
     }

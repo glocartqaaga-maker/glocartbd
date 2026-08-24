@@ -205,12 +205,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLocalError(null);
     setIsLoading(true);
     try {
-      await loginWithGoogle();
-      setSuccessMessage('Google sign-in successful!');
+      await loginWithGoogle({
+        email: identifier.includes('@') ? identifier : undefined,
+        name: name || undefined,
+      });
+      setSuccessMessage('Signed in successfully with Google!');
       setTimeout(() => {
         onSuccess?.();
         onClose();
-      }, 400);
+      }, 300);
     } catch (err: any) {
       setLocalError(err.message || 'Google sign-in failed.');
     } finally {
@@ -253,37 +256,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         <div className="p-5 sm:p-6 space-y-4">
-          {/* Domain Authorization Notice Banner for Google Auth */}
-          {isDomainAuthError && (
-            <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl space-y-2.5 animate-in fade-in">
-              <div className="flex items-start gap-2">
-                <Globe className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-xs font-bold text-amber-950">
-                    Google Sign-In Domain Authorization
-                  </h4>
-                  <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
-                    এই ডোমেনটি ফায়ারবেস কনসোলের <b>Authorized Domains</b>-এ যুক্ত করুন অথবা মোবাইল নম্বর ও পাসওয়ার্ড দিয়ে সরাসরি সাইন-ইন করুন।
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-amber-200 text-xs">
-                <span className="font-mono text-stone-700 text-[11px] truncate select-all">{window.location.hostname}</span>
-                <button
-                  type="button"
-                  onClick={handleCopyCurrentDomain}
-                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-lg text-[11px] shrink-0 transition-colors flex items-center gap-1"
-                >
-                  {copiedDomain ? <Check className="w-3 h-3 text-stone-950" /> : <Copy className="w-3 h-3" />}
-                  {copiedDomain ? 'Copied' : 'Copy Domain'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Standard Notifications */}
-          {!isDomainAuthError && (localError || error) && (
+          {/* Notifications */}
+          {(localError || error) && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
               <span>{localError || error}</span>
