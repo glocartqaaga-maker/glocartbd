@@ -11,7 +11,8 @@ import {
   Loader2, 
   Globe,
   Copy,
-  Check
+  Check,
+  ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BD_DISTRICTS } from '../lib/bd-locations';
@@ -73,10 +74,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const isDomainAuthError = 
-    localError === 'GOOGLE_UNAUTHORIZED_DOMAIN' || 
-    error === 'GOOGLE_UNAUTHORIZED_DOMAIN' ||
-    localError?.includes('domain authorization') ||
-    error?.includes('domain authorization');
+    Boolean(
+      localError?.includes('Authorized Domains') ||
+      error?.includes('Authorized Domains') ||
+      localError === 'GOOGLE_UNAUTHORIZED_DOMAIN' || 
+      error === 'GOOGLE_UNAUTHORIZED_DOMAIN' ||
+      localError?.includes('unauthorized-domain') ||
+      error?.includes('unauthorized-domain')
+    );
 
   const handleCopyCurrentDomain = () => {
     try {
@@ -255,11 +260,60 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         <div className="p-5 sm:p-6 space-y-4">
           {/* Notifications */}
-          {(localError || error) && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-              <span>{localError || error}</span>
+          {isDomainAuthError ? (
+            <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-stone-900 space-y-3 shadow-sm">
+              <div className="flex items-start gap-2">
+                <Globe className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-stone-950 text-xs sm:text-sm">
+                    গুগল সাইন-ইন চালু করার নিয়ম (Firebase Authorized Domain)
+                  </h4>
+                  <p className="text-[11px] text-stone-600 mt-1 leading-relaxed">
+                    Firebase নিরাপত্তার স্বার্থে আপনার ওয়েবসাইটের ডোমেইনটি Firebase Console-এ অনুমোদিত থাকা আবশ্যক।
+                  </p>
+                </div>
+              </div>
+
+              {/* Current Domain Box with Copy */}
+              <div className="bg-white p-2.5 rounded-xl border border-amber-200 flex items-center justify-between gap-2">
+                <div className="truncate">
+                  <span className="text-[10px] uppercase font-bold text-stone-400 block">বর্তমান ডোমেইন</span>
+                  <span className="font-mono font-bold text-xs text-stone-800 truncate select-all">
+                    {typeof window !== 'undefined' ? window.location.hostname : 'www.glocartbd.com'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyCurrentDomain}
+                  className="px-2.5 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors"
+                >
+                  {copiedDomain ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedDomain ? 'কপি হয়েছে' : 'ডোমেইন কপি'}</span>
+                </button>
+              </div>
+
+              {/* Direct Firebase Console link */}
+              <a
+                href="https://console.firebase.google.com/project/gen-lang-client-0731187733/authentication/settings"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2 px-3 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+              >
+                <span>Firebase Settings ওপেন করুন</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+
+              <p className="text-[11px] text-stone-600 text-center">
+                👉 অথবা নিচে সরাসরি <strong>মোবাইল নম্বর ও পাসওয়ার্ড</strong> দিয়ে সাইন-ইন করুন।
+              </p>
             </div>
+          ) : (
+            (localError || error) && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                <span>{localError || error}</span>
+              </div>
+            )
           )}
 
           {successMessage && (

@@ -101,6 +101,12 @@ export const Header: React.FC<HeaderProps> = ({
                 src={glocartLogo}
                 alt="GloCart BD Logo"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  if (!target.src.endsWith('/logo.png')) {
+                    target.src = '/logo.png';
+                  }
+                }}
                 className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform shrink-0"
               />
               <div className="flex flex-col">

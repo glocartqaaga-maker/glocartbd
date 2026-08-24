@@ -71,6 +71,12 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory
                 src={glocartLogo}
                 alt="GloCart BD Logo"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  if (!target.src.endsWith('/logo.png')) {
+                    target.src = '/logo.png';
+                  }
+                }}
                 className="w-8 h-8 rounded-lg object-cover shadow-sm shrink-0"
               />
               <span className="font-bold text-lg text-white tracking-tight">

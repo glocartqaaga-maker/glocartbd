@@ -87,6 +87,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 src={glocartLogo}
                 alt="GloCart BD Logo"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  if (!target.src.endsWith('/logo.png')) {
+                    target.src = '/logo.png';
+                  }
+                }}
                 className="w-9 h-9 rounded-xl object-cover shadow-md shadow-amber-500/20 shrink-0"
               />
               <div>
