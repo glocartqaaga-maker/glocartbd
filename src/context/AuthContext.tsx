@@ -71,18 +71,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const isDevAdminEmail = 
         firebaseUser.email?.toLowerCase() === 'admin@glocartbd.com' || 
+        firebaseUser.email?.toLowerCase() === 'info.glocartbd@gmail.com' || 
         firebaseUser.email?.toLowerCase() === 'glocart.qaaga@gmail.com';
 
       if (userDocSnap.exists()) {
         const data = userDocSnap.data() as UserProfile;
-        // If email is an authorized admin email, ensure admin role
+        // Sync latest Google display name, photo, or admin role if available
+        let needsUpdate = false;
+        const updates: Partial<UserProfile> = {};
+
+        if (firebaseUser.photoURL && data.photoURL !== firebaseUser.photoURL) {
+          data.photoURL = firebaseUser.photoURL;
+          updates.photoURL = firebaseUser.photoURL;
+          needsUpdate = true;
+        }
+        if (firebaseUser.displayName && (!data.name || data.name === 'Valued Customer' || data.name === 'customer')) {
+          data.name = firebaseUser.displayName;
+          updates.name = firebaseUser.displayName;
+          needsUpdate = true;
+        }
         if (isDevAdminEmail && data.role !== 'admin') {
+          data.role = 'admin';
+          updates.role = 'admin';
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
           try {
-            await updateDoc(userDocRef, { role: 'admin' });
+            await updateDoc(userDocRef, updates);
           } catch (e) {
             console.warn('Note updating admin role in Firestore:', e);
           }
-          data.role = 'admin';
         }
         try {
           localStorage.setItem('glocart_customer_session', JSON.stringify(data));
@@ -97,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: firebaseUser.displayName || (isDevAdminEmail ? 'GloCart Admin' : firebaseUser.email?.split('@')[0]) || 'Valued Customer',
           email: firebaseUser.email || (isDevAdminEmail ? 'admin@glocartbd.com' : ''),
           phone: firebaseUser.phoneNumber || (isDevAdminEmail ? '+8801711000000' : ''),
+          photoURL: firebaseUser.photoURL || '',
           role: isDevAdminEmail ? 'admin' : 'customer',
           status: 'active',
           orderCount: 0,
@@ -149,7 +169,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const savedCustomerSession = localStorage.getItem('glocart_customer_session');
           if (savedCustomerSession) {
             const parsed = JSON.parse(savedCustomerSession) as UserProfile;
-            setUserProfile(parsed);
+            if (parsed.email === 'customer@gmail.com' && parsed.uid.startsWith('google_')) {
+              localStorage.removeItem('glocart_customer_session');
+              setUserProfile(null);
+            } else {
+              setUserProfile(parsed);
+            }
           } else {
             setUserProfile(null);
           }
@@ -185,7 +210,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanPhone = phone.trim().replace(/\D/g, '');
     const cleanEmail = email?.trim().toLowerCase() || `${cleanPhone || Date.now()}@phone.glocartbd.com`;
     const cleanName = name.trim() || 'Valued Customer';
-    const isDevAdmin = cleanEmail === 'admin@glocartbd.com' || cleanEmail === 'glocart.qaaga@gmail.com';
+    const isDevAdmin = 
+      cleanEmail === 'admin@glocartbd.com' || 
+      cleanEmail === 'info.glocartbd@gmail.com' || 
+      cleanEmail === 'glocart.qaaga@gmail.com';
 
     try {
       // 1. First attempt: standard Firebase Authentication
@@ -396,6 +424,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const isAdminAttempt = 
         firebaseUser.email?.toLowerCase() === 'admin@glocartbd.com' || 
+        firebaseUser.email?.toLowerCase() === 'info.glocartbd@gmail.com' || 
         firebaseUser.email?.toLowerCase() === 'glocart.qaaga@gmail.com';
 
       if (isAdminAttempt) {
@@ -514,13 +543,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return profile;
   };
 
-  // Google Sign-In (with seamless automatic profile creation & resilient domain fallback)
-  const loginWithGoogle = async (googleHint?: { email?: string; name?: string }) => {
+  // Google Sign-In with real Google Account from device
+  const loginWithGoogle = async () => {
     setError(null);
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const isOwnerEmail = 
         result.user.email?.toLowerCase() === 'glocart.qaaga@gmail.com' || 
+        result.user.email?.toLowerCase() === 'info.glocartbd@gmail.com' || 
         result.user.email?.toLowerCase() === 'admin@glocartbd.com';
 
       if (isOwnerEmail) {
@@ -535,69 +565,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       console.warn('Google sign-in popup notice:', err);
 
-      // If domain is unauthorized in Firebase console, popup blocked, or operation not allowed,
-      // directly create the customer's Google Account profile so they are instantly logged in!
-      if (
-        err.code === 'auth/unauthorized-domain' || 
-        err.code === 'auth/popup-blocked' ||
-        err.code === 'auth/operation-not-allowed' ||
-        err.message?.includes('domain') ||
-        err.message?.includes('unauthorized')
-      ) {
-        try {
-          const defaultGoogleEmail = googleHint?.email?.trim().toLowerCase() || 'customer@gmail.com';
-          const defaultGoogleName = googleHint?.name?.trim() || defaultGoogleEmail.split('@')[0] || 'Google User';
-          const isOwner = 
-            defaultGoogleEmail === 'glocart.qaaga@gmail.com' || 
-            defaultGoogleEmail === 'admin@glocartbd.com';
-
-          const googleUid = `google_${defaultGoogleEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-          const googleProfile: UserProfile = {
-            uid: googleUid,
-            name: defaultGoogleName,
-            email: defaultGoogleEmail,
-            phone: '',
-            district: 'Dhaka',
-            area: '',
-            address: '',
-            role: isOwner ? 'admin' : 'customer',
-            status: 'active',
-            orderCount: 0,
-            totalSpent: 0,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-
-          if (isOwner) {
-            localStorage.setItem('glocart_admin_session', 'true');
-            setIsLocalAdmin(true);
-          }
-
-          try {
-            await setDoc(doc(db, 'users', googleUid), {
-              ...googleProfile,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            }, { merge: true });
-          } catch (dbErr) {
-            console.warn('Firestore write note:', dbErr);
-          }
-
-          try {
-            localStorage.setItem('glocart_customer_session', JSON.stringify(googleProfile));
-          } catch {
-            // ignore
-          }
-
-          setUserProfile(googleProfile);
-          return null;
-        } catch (fallbackErr) {
-          console.error('Direct Google login fallback failed:', fallbackErr);
-        }
-      }
-
       let friendly = err.message || 'Google sign-in could not be completed.';
+      if (err.code === 'auth/unauthorized-domain') {
+        friendly = `ফায়ারবেস কনসোলের Authorized Domains-এ ${window.location.hostname} যুক্ত করুন অথবা মোবাইল নম্বর ও পাসওয়ার্ড দিয়ে সাইন-ইন করুন।`;
+      } else if (err.code === 'auth/popup-blocked') {
+        friendly = 'Browser popup blocked. Please allow pop-ups for this site to sign in with Google.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        friendly = 'Google sign-in is not enabled in Firebase Console. Please enable Google provider under Authentication.';
+      }
       setError(friendly);
       throw new Error(friendly);
     }
@@ -675,6 +650,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isLocalAdmin ||
     userProfile?.role === 'admin' ||
     currentUser?.email?.toLowerCase() === 'admin@glocartbd.com' ||
+    currentUser?.email?.toLowerCase() === 'info.glocartbd@gmail.com' ||
     currentUser?.email?.toLowerCase() === 'glocart.qaaga@gmail.com';
 
   return (

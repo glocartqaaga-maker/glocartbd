@@ -15,6 +15,7 @@ import {
   Truck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import glocartLogo from '../../assets/images/glocart_drive_logo.png';
 
 export type AdminTab = 'dashboard' | 'products' | 'categories' | 'sliders' | 'orders' | 'customers' | 'settings';
 
@@ -82,9 +83,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         <div className="p-5 border-b border-stone-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-amber-500 text-stone-950 font-black flex items-center justify-center text-lg shadow-md shadow-amber-500/20">
-                G
-              </div>
+              <img
+                src={glocartLogo}
+                alt="GloCart BD Logo"
+                referrerPolicy="no-referrer"
+                className="w-9 h-9 rounded-xl object-cover shadow-md shadow-amber-500/20 shrink-0"
+              />
               <div>
                 <h1 className="font-extrabold text-white text-base leading-tight">GloCart BD</h1>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">

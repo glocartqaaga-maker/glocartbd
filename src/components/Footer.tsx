@@ -5,6 +5,7 @@ import {
   MapPin, 
   Clock, 
   Facebook, 
+  Instagram,
   ShieldCheck, 
   Truck, 
   RotateCcw,
@@ -14,6 +15,7 @@ import {
   Lock
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import glocartLogo from '../assets/images/glocart_drive_logo.png';
 
 interface FooterProps {
   onOpenTracking: () => void;
@@ -64,10 +66,13 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand Col */}
           <div className="space-y-4 md:col-span-1">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-amber-500 text-stone-950 font-black flex items-center justify-center text-base">
-                G
-              </div>
+            <div className="flex items-center gap-2.5">
+              <img
+                src={glocartLogo}
+                alt="GloCart BD Logo"
+                referrerPolicy="no-referrer"
+                className="w-8 h-8 rounded-lg object-cover shadow-sm shrink-0"
+              />
               <span className="font-bold text-lg text-white tracking-tight">
                 GloCart<span className="text-amber-500">BD</span>
               </span>
@@ -76,17 +81,32 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory
               {storeSettings.footerDescription ||
                 'GloCart BD is your trusted online shopping destination in Bangladesh, delivering quality products with reliability.'}
             </p>
-            {storeSettings.facebook && (
-              <a
-                href={storeSettings.facebook}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors"
-              >
-                <Facebook className="w-4 h-4 text-blue-400" />
-                <span>Follow on Facebook</span>
-              </a>
-            )}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {storeSettings.facebook && (
+                <a
+                  id="link-footer-facebook"
+                  href={storeSettings.facebook}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors"
+                >
+                  <Facebook className="w-4 h-4 text-blue-400" />
+                  <span>Facebook</span>
+                </a>
+              )}
+              {(storeSettings.instagram || 'https://www.instagram.com/glocart_bd') && (
+                <a
+                  id="link-footer-instagram"
+                  href={storeSettings.instagram || 'https://www.instagram.com/glocart_bd'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-gradient-to-r hover:from-purple-900/40 hover:to-pink-900/40 text-stone-200 text-xs font-medium transition-all group"
+                >
+                  <Instagram className="w-4 h-4 text-pink-400 group-hover:text-pink-300 transition-colors" />
+                  <span>Instagram</span>
+                </a>
+              )}
+            </div>
           </div>
 
           {/* Quick Links */}

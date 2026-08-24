@@ -4,10 +4,11 @@ import { Category, Product, SliderBanner, StoreSettings } from '../types';
 
 export const DEFAULT_SETTINGS: StoreSettings = {
   storeName: 'GloCart BD',
-  phone: '+880 1711-223344',
-  email: 'support@glocartbd.com',
+  phone: '+880 13370-80184',
+  email: 'info.glocartbd@gmail.com',
   facebook: 'https://facebook.com/glocartbd',
-  address: 'Level 4, House 28, Road 11, Banani, Dhaka-1213, Bangladesh',
+  instagram: 'https://www.instagram.com/glocart_bd',
+  address: 'Level- 1, House- 17, Road- 4, gulshan -1, Dhaka, Bangladesh',
   promoBar: '🎉 Grand Opening Offer! Free Shipping inside Dhaka on orders over ৳1,999 with code GLOCART10',
   heroText: 'Premium Shopping Delivered Across Bangladesh',
   heroSubtitle: 'Authentic electronics, trendy fashion, and lifestyle essentials with fast home delivery & easy returns.',

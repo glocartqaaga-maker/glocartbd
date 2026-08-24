@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { Category } from '../types';
+import glocartLogo from '../assets/images/glocart_drive_logo.png';
 
 interface HeaderProps {
   categories: Category[];
@@ -94,11 +95,14 @@ export const Header: React.FC<HeaderProps> = ({
                 e.preventDefault();
                 onSelectCategory('all');
               }}
-              className="flex items-center gap-2 group"
+              className="flex items-center gap-2.5 group"
             >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black text-xl shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
-                G
-              </div>
+              <img
+                src={glocartLogo}
+                alt="GloCart BD Logo"
+                referrerPolicy="no-referrer"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform shrink-0"
+              />
               <div className="flex flex-col">
                 <span className="font-bold text-lg sm:text-xl text-stone-900 tracking-tight leading-none">
                   GloCart<span className="text-amber-600 ml-0.5">BD</span>
@@ -170,12 +174,21 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
                   className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-2 rounded-lg text-stone-800 hover:bg-stone-100 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-xs border border-amber-300">
-                    {userProfile?.name?.charAt(0).toUpperCase() || currentUser?.email?.charAt(0).toUpperCase() || 'U'}
-                  </div>
+                  {(currentUser?.photoURL || userProfile?.photoURL) ? (
+                    <img
+                      src={currentUser?.photoURL || userProfile?.photoURL}
+                      alt={userProfile?.name || 'User'}
+                      referrerPolicy="no-referrer"
+                      className="w-8 h-8 rounded-full object-cover border border-amber-400 shadow-2xs shrink-0"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-xs border border-amber-300">
+                      {userProfile?.name?.charAt(0).toUpperCase() || currentUser?.displayName?.charAt(0).toUpperCase() || currentUser?.email?.charAt(0).toUpperCase() || 'U'}
+                    </div>
+                  )}
                   <div className="hidden md:flex flex-col text-left">
                     <span className="text-xs font-semibold leading-tight truncate max-w-[100px]">
-                      {userProfile?.name?.split(' ')[0] || 'My Account'}
+                      {userProfile?.name?.split(' ')[0] || currentUser?.displayName?.split(' ')[0] || 'My Account'}
                     </span>
                     <span className="text-[10px] text-stone-500">
                       {userProfile?.role === 'admin' ? 'Admin' : 'Customer'}

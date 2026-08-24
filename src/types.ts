@@ -3,6 +3,7 @@ export interface UserProfile {
   name: string;
   email: string;
   phone: string;
+  photoURL?: string;
   district?: string;
   area?: string;
   address?: string;
@@ -127,6 +128,7 @@ export interface StoreSettings {
   phone: string;
   email: string;
   facebook: string;
+  instagram?: string;
   address: string;
   promoBar: string;
   heroText: string;

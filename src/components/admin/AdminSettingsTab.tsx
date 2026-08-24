@@ -276,6 +276,17 @@ export const AdminSettingsTab: React.FC = () => {
                 className="w-full px-3 py-2 bg-stone-50 border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
               />
             </div>
+
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1">Instagram Page URL</label>
+              <input
+                type="text"
+                value={settings.instagram || ''}
+                onChange={(e) => handleChange('instagram', e.target.value)}
+                placeholder="https://www.instagram.com/glocart_bd"
+                className="w-full px-3 py-2 bg-stone-50 border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
+              />
+            </div>
           </div>
 
           <div>

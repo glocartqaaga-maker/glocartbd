@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 350" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6A00" />
+      <stop offset="50%" stop-color="#FA5400" />
+      <stop offset="100%" stop-color="#E64A00" />
+    </linearGradient>
+
+    <!-- 3D Shadow Filter for White Elements -->
+    <filter id="cartShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#7A2200" flood-opacity="0.35" />
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#4A1500" flood-opacity="0.2" />
+    </filter>
+
+    <!-- Subtle Inner Globe Shadow -->
+    <filter id="globeShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#7A2200" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="500" height="350" rx="36" fill="url(#bgGrad)" />
+
+  <!-- Entire 3D Logo Group with drop shadow -->
+  <g filter="url(#cartShadow)">
+    <!-- Speed Lines on Left -->
+    <!-- Top Speed Line -->
+    <polygon points="90,195 145,190 145,200" fill="#FFFFFF" />
+    <!-- Middle Speed Line (Longest) -->
+    <polygon points="65,220 155,213 155,227" fill="#FFFFFF" />
+    <!-- Bottom Speed Line -->
+    <polygon points="95,245 150,240 150,250" fill="#FFFFFF" />
+
+    <!-- Globe Section (Inside upper curve of G) -->
+    <g transform="translate(280, 142)">
+      <!-- Globe Circle Outline & Grid Lines -->
+      <circle cx="0" cy="0" r="76" fill="none" stroke="#FFFFFF" stroke-width="2.5" opacity="0.95" />
+      <!-- Latitude Lines -->
+      <ellipse cx="0" cy="0" rx="76" ry="24" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.85" />
+      <ellipse cx="0" cy="-38" rx="66" ry="14" fill="none" stroke="#FFFFFF" stroke-width="1.8" opacity="0.75" />
+      <ellipse cx="0" cy="38" rx="66" ry="14" fill="none" stroke="#FFFFFF" stroke-width="1.8" opacity="0.75" />
+      <ellipse cx="0" cy="-58" rx="48" ry="8" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.65" />
+      <ellipse cx="0" cy="58" rx="48" ry="8" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.65" />
+
+      <!-- Longitude Lines -->
+      <ellipse cx="0" cy="0" rx="26" ry="76" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.85" />
+      <ellipse cx="0" cy="0" rx="52" ry="76" fill="none" stroke="#FFFFFF" stroke-width="1.8" opacity="0.75" />
+      <line x1="0" y1="-76" x2="0" y2="76" stroke="#FFFFFF" stroke-width="2" opacity="0.85" />
+      <line x1="-76" y1="0" x2="76" y2="0" stroke="#FFFFFF" stroke-width="2" opacity="0.85" />
+
+      <!-- Continents Silhouette (White Landmasses: Europe, Africa, Asia, Australia, Americas) -->
+      <path d="
+        M-5,-42 C-2,-50 15,-48 22,-40 C28,-34 38,-35 45,-28 C52,-20 58,-10 52,2 C46,12 55,20 48,32 C42,42 35,46 28,40 C22,35 15,38 8,30 C2,22 -2,12 -8,8 C-14,4 -22,12 -28,24 C-32,32 -38,36 -42,30 C-46,22 -44,8 -38,-4 C-32,-14 -35,-25 -25,-32 C-18,-38 -10,-36 -5,-42 Z
+        M-35,-22 C-45,-20 -55,-12 -58,2 C-60,14 -52,22 -48,15 C-44,8 -40,-12 -35,-22 Z
+        M32,28 C38,26 48,32 46,42 C44,48 36,48 30,42 C26,36 28,30 32,28 Z
+        M12,-15 C18,-18 24,-12 22,-5 C20,2 14,0 12,-15 Z
+        M-18,-10 C-12,-12 -8,-4 -12,2 C-16,8 -22,2 -18,-10 Z
+      " fill="#FFFFFF" />
+    </g>
+
+    <!-- Main Stylized Cart Body forming the Letter 'G' and Handle -->
+    <path d="
+      M 335,40
+      C 270,36 195,70 160,132
+      C 130,185 145,248 185,280
+      C 210,300 255,308 300,308
+      C 340,308 375,290 400,245
+      L 445,130
+      C 448,122 455,118 465,118
+      L 490,118
+      L 475,142
+      L 452,142
+      L 410,248
+      C 392,295 350,328 295,328
+      C 240,328 190,318 152,285
+      C 105,244 95,175 132,115
+      C 172,50 255,12 335,18
+      C 350,19 360,24 350,30
+      C 342,35 338,38 335,40
+      Z
+    " fill="#FFFFFF" fill-rule="evenodd" />
+
+    <!-- Center Horizontal Shelf & Inside Bar of 'G' -->
+    <path d="
+      M 205,178
+      L 310,178
+      C 318,178 322,182 320,190
+      L 290,268
+      C 288,274 282,278 274,278
+      L 175,278
+      C 165,278 160,270 166,262
+      L 195,186
+      C 198,180 202,178 205,178
+      Z
+    " fill="#FFFFFF" />
+
+    <!-- Cart Bottom Wheel Base Structure -->
+    <path d="
+      M 165,278
+      L 330,278
+      C 338,278 344,284 344,292
+      C 344,300 338,306 330,306
+      L 175,306
+      C 165,306 158,298 158,290
+      C 158,283 161,278 165,278
+      Z
+    " fill="#FFFFFF" opacity="0.95" />
+
+    <!-- Left Wheel Assembly -->
+    <g transform="translate(185, 320)">
+      <circle cx="0" cy="0" r="18" fill="#FFFFFF" />
+      <circle cx="0" cy="0" r="10" fill="#FA5400" />
+    </g>
+
+    <!-- Right Wheel Assembly -->
+    <g transform="translate(305, 320)">
+      <circle cx="0" cy="0" r="18" fill="#FFFFFF" />
+      <circle cx="0" cy="0" r="10" fill="#FA5400" />
+    </g>
+  </g>
+</svg>

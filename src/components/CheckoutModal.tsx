@@ -59,19 +59,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Pre-fill user profile info if logged in
+  // Pre-fill user profile info when available or modal opens
   useEffect(() => {
-    if (userProfile) {
-      if (userProfile.name && !customerName) setCustomerName(userProfile.name);
-      if (userProfile.phone && !phone) setPhone(userProfile.phone);
-      if (userProfile.email && !email) setEmail(userProfile.email);
-      if (userProfile.district) setDistrict(userProfile.district);
-      if (userProfile.area && !area) setArea(userProfile.area);
-      if (userProfile.address && !address) setAddress(userProfile.address);
-    } else if (currentUser?.email && !email) {
-      setEmail(currentUser.email);
+    if (isOpen) {
+      if (userProfile) {
+        if (userProfile.name) setCustomerName(userProfile.name);
+        if (userProfile.phone) setPhone(userProfile.phone);
+        if (userProfile.email) setEmail(userProfile.email);
+        if (userProfile.district) setDistrict(userProfile.district);
+        if (userProfile.area) setArea(userProfile.area);
+        if (userProfile.address) setAddress(userProfile.address);
+      } else if (currentUser) {
+        if (currentUser.displayName) setCustomerName(currentUser.displayName);
+        if (currentUser.email) setEmail(currentUser.email);
+        if (currentUser.phoneNumber) setPhone(currentUser.phoneNumber);
+      }
     }
-  }, [userProfile, currentUser]);
+  }, [isOpen, userProfile, currentUser]);
 
   if (!isOpen) return null;
 
@@ -84,10 +88,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setErrorMessage(null);
     setIsGoogleLoading(true);
     try {
-      await loginWithGoogle({
-        email: email || undefined,
-        name: customerName || undefined,
-      });
+      const user = await loginWithGoogle();
+      if (user) {
+        if (user.displayName && !customerName) setCustomerName(user.displayName);
+        if (user.email && !email) setEmail(user.email);
+        if (user.phoneNumber && !phone) setPhone(user.phoneNumber);
+      }
     } catch (err: any) {
       setErrorMessage(err.message || 'Google sign-in could not be completed.');
     } finally {

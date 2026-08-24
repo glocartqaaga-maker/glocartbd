@@ -48,7 +48,33 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const snap = await getDoc(doc(db, 'settings', 'store'));
         if (snap.exists()) {
-          setStoreSettings({ ...DEFAULT_SETTINGS, ...snap.data() } as StoreSettings);
+          const cloudData = snap.data() as Partial<StoreSettings>;
+          // If Firestore contains old placeholder data, upgrade to new contact details
+          const merged: StoreSettings = { ...DEFAULT_SETTINGS, ...cloudData };
+          if (!merged.instagram) {
+            merged.instagram = DEFAULT_SETTINGS.instagram;
+          }
+          if (
+            merged.phone === '+880 1711-223344' ||
+            merged.email === 'support@glocartbd.com' ||
+            merged.address?.includes('Banani')
+          ) {
+            merged.phone = DEFAULT_SETTINGS.phone;
+            merged.email = DEFAULT_SETTINGS.email;
+            merged.address = DEFAULT_SETTINGS.address;
+            try {
+              await setDoc(doc(db, 'settings', 'store'), merged, { merge: true });
+            } catch (e) {
+              console.warn('Note updating legacy store settings in Firestore:', e);
+            }
+          }
+          setStoreSettings(merged);
+        } else {
+          try {
+            await setDoc(doc(db, 'settings', 'store'), DEFAULT_SETTINGS, { merge: true });
+          } catch (e) {
+            console.warn('Note writing initial store settings in Firestore:', e);
+          }
         }
       } catch (err) {
         console.warn('Could not fetch store settings, using defaults:', err);

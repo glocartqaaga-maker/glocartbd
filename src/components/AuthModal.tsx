@@ -113,6 +113,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const isTryingAdmin = 
         cleanLower === 'admin' || 
         cleanLower === 'admin@glocartbd.com' || 
+        cleanLower === 'info.glocartbd@gmail.com' || 
         cleanLower === 'glocart.qaaga@gmail.com' ||
         password === 'glo123cart';
 
@@ -205,10 +206,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLocalError(null);
     setIsLoading(true);
     try {
-      await loginWithGoogle({
-        email: identifier.includes('@') ? identifier : undefined,
-        name: name || undefined,
-      });
+      await loginWithGoogle();
       setSuccessMessage('Signed in successfully with Google!');
       setTimeout(() => {
         onSuccess?.();
