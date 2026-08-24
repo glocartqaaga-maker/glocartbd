@@ -26,7 +26,8 @@ import {
   updateDoc, 
   serverTimestamp, 
   query, 
-  orderBy 
+  orderBy,
+  deleteField
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { uploadProductImage, uploadMultipleProductImages, deleteStorageImage } from '../../lib/storage';
@@ -67,8 +68,14 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
 
   // Form submit state
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
+
+  // In-App Modals for Delete Confirmation & Image URL (Iframe friendly)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
+  const [customImageUrl, setCustomImageUrl] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -186,19 +193,61 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
   };
 
   // Remove individual photo
-  const handleRemovePhoto = async (indexToRemove: number) => {
+  const handleRemovePhoto = (e: React.MouseEvent, indexToRemove: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     const photoToRemove = images[indexToRemove];
     const newImages = images.filter((_, idx) => idx !== indexToRemove);
     setImages(newImages);
 
     // If removed photo was primary, assign the first available
-    if (primaryImageUrl === photoToRemove.url) {
+    if (primaryImageUrl === photoToRemove?.url) {
       setPrimaryImageUrl(newImages[0]?.url || '');
     }
 
-    if (photoToRemove.storagePath) {
+    if (photoToRemove?.storagePath) {
       deleteStorageImage(photoToRemove.storagePath);
     }
+  };
+
+  // Remove all photos
+  const handleClearAllPhotos = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (images.length === 0) return;
+    images.forEach((img) => {
+      if (img.storagePath) deleteStorageImage(img.storagePath);
+    });
+    setImages([]);
+    setPrimaryImageUrl('');
+  };
+
+  // Open in-app dialog to add photo via URL
+  const handleOpenUrlModal = () => {
+    setCustomImageUrl('');
+    setIsUrlModalOpen(true);
+  };
+
+  // Submit in-app URL
+  const handleConfirmAddUrl = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customImageUrl.trim()) return;
+    const cleanUrl = customImageUrl.trim();
+    const newImg: ProductImage = {
+      url: cleanUrl,
+      name: 'External Image',
+      isPrimary: images.length === 0,
+    };
+    setImages((prev) => {
+      const updated = [...prev, newImg];
+      if (!primaryImageUrl) {
+        setPrimaryImageUrl(cleanUrl);
+      }
+      return updated;
+    });
+    setIsUrlModalOpen(false);
+    setCustomImageUrl('');
   };
 
   // Select primary photo
@@ -224,27 +273,35 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
         prev.map((p) => (p.id === prod.id ? { ...p, active: !p.active } : p))
       );
     } catch (err: any) {
-      alert('Error updating status: ' + err.message);
+      setFeedbackSuccess('Error updating status: ' + err.message);
+      setTimeout(() => setFeedbackSuccess(null), 3500);
     }
   };
 
-  // Delete product
-  const handleDeleteProduct = async (prod: Product) => {
-    if (!window.confirm(`Are you sure you want to permanently delete "${prod.name}"?`)) {
-      return;
-    }
+  // Trigger delete modal for a product
+  const handleDeleteProductClick = (prod: Product) => {
+    setProductToDelete(prod);
+  };
 
+  // Execute confirmed product deletion
+  const handleConfirmDeleteProduct = async () => {
+    if (!productToDelete) return;
+    const target = productToDelete;
+    setIsDeletingId(target.id);
     try {
-      await deleteDoc(doc(db, 'products', prod.id));
+      await deleteDoc(doc(db, 'products', target.id));
       // Delete images from storage if available
-      prod.images?.forEach((img) => {
+      target.images?.forEach((img) => {
         if (img.storagePath) deleteStorageImage(img.storagePath);
       });
-      setProducts((prev) => prev.filter((p) => p.id !== prod.id));
-      setFeedbackSuccess(`Product "${prod.name}" deleted successfully.`);
-      setTimeout(() => setFeedbackSuccess(null), 3000);
+      setProducts((prev) => prev.filter((p) => p.id !== target.id));
+      setProductToDelete(null);
+      setFeedbackSuccess(`Product "${target.name}" deleted successfully.`);
+      setTimeout(() => setFeedbackSuccess(null), 3500);
     } catch (err: any) {
       alert('Failed to delete product: ' + err.message);
+    } finally {
+      setIsDeletingId(null);
     }
   };
 
@@ -276,26 +333,43 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
       const selectedCategoryObj = categories.find((c) => c.id === categoryId);
       const chosenPrimary = primaryImageUrl || images[0]?.url || '';
 
-      const productPayload: Omit<Product, 'id'> = {
+      const productPayload: Record<string, any> = {
         name: name.trim(),
         categoryId: categoryId || categories[0]?.id || 'cat-general',
         categoryName: selectedCategoryObj?.name || 'General',
         price: Number(price),
-        oldPrice: oldPrice !== '' ? Number(oldPrice) : undefined,
         stock: Number(stock),
         rating: Number(rating) || 4.8,
         reviews: Number(reviews) || 45,
-        badge: badge.trim() || undefined,
         description: description.trim() || 'Genuine product with warranty & nationwide delivery.',
         active: active,
         primaryImage: chosenPrimary,
-        images: images.map((img) => ({
-          ...img,
-          isPrimary: img.url === chosenPrimary,
-        })),
+        images: images.map((img) => {
+          const item: Record<string, any> = {
+            url: img.url,
+            name: img.name || 'Product Photo',
+            isPrimary: img.url === chosenPrimary,
+          };
+          if (img.storagePath) {
+            item.storagePath = img.storagePath;
+          }
+          return item;
+        }),
         createdAt: editingProduct?.createdAt || serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
+
+      if (oldPrice !== '' && !isNaN(Number(oldPrice))) {
+        productPayload.oldPrice = Number(oldPrice);
+      } else if (editingProduct) {
+        productPayload.oldPrice = deleteField();
+      }
+
+      if (badge.trim()) {
+        productPayload.badge = badge.trim();
+      } else if (editingProduct) {
+        productPayload.badge = deleteField();
+      }
 
       if (editingProduct) {
         // Update existing
@@ -482,11 +556,16 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
                           <Edit3 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteProduct(prod)}
-                          className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          onClick={() => handleDeleteProductClick(prod)}
+                          disabled={isDeletingId === prod.id}
+                          className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
                           title="Delete Product"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {isDeletingId === prod.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-rose-600" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -634,25 +713,49 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
 
               {/* MULTIPLE PHOTO UPLOAD SECTION (Extremely Important requirement) */}
               <div className="space-y-3 pt-2 border-t border-stone-200">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <label className="block text-xs font-bold text-stone-900">
-                      Product Photos (Multiple Selection Supported) <span className="text-rose-500">*</span>
+                      Product Photos (Multiple Supported) <span className="text-rose-500">*</span>
                     </label>
                     <p className="text-[11px] text-stone-500">
-                      Select multiple photos from Laptop, Desktop, Android, or iPhone. Max 5 MB each.
+                      Select photos from Laptop, Desktop, Android, or iPhone. Max 5 MB each.
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploadingPhotos}
-                    className="px-3 py-1.5 bg-stone-900 hover:bg-black text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Upload Photos</span>
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {images.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearAllPhotos}
+                        className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl flex items-center gap-1 transition-colors border border-rose-200"
+                        title="Remove all uploaded photos"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Clear All ({images.length})</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleOpenUrlModal}
+                      className="px-2.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-xl flex items-center gap-1 transition-colors border border-stone-300"
+                      title="Add photo using a link/URL"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 text-stone-600" />
+                      <span>Add via Link</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingPhotos}
+                      className="px-3 py-1.5 bg-stone-900 hover:bg-black text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors shadow-xs"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Upload Photos</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Hidden Multi-file input */}
@@ -686,50 +789,60 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
 
                 {/* Photos Grid & Primary Selector */}
                 {images.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 p-3 bg-stone-50 rounded-2xl border border-stone-200">
-                    {images.map((img, index) => {
-                      const isPrimary = primaryImageUrl === img.url;
-                      return (
-                        <div
-                          key={index}
-                          className={`relative group aspect-square rounded-xl overflow-hidden border-2 bg-white shadow-2xs transition-all ${
-                            isPrimary ? 'border-amber-500 ring-2 ring-amber-400/30' : 'border-stone-200'
-                          }`}
-                        >
-                          <img
-                            src={img.url}
-                            alt={`Product Photo ${index + 1}`}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover"
-                          />
-
-                          {/* Primary Badge */}
-                          {isPrimary ? (
-                            <span className="absolute top-1 left-1 bg-amber-500 text-stone-950 font-black text-[9px] px-1.5 py-0.5 rounded-md shadow-xs">
-                              Primary
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleSetPrimaryPhoto(img.url)}
-                              className="absolute top-1 left-1 bg-stone-900/80 hover:bg-amber-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              Set Primary
-                            </button>
-                          )}
-
-                          {/* Remove button */}
-                          <button
-                            type="button"
-                            onClick={() => handleRemovePhoto(index)}
-                            className="absolute top-1 right-1 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full opacity-80 group-hover:opacity-100 transition-opacity shadow-xs"
-                            title="Remove Photo"
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-3 bg-stone-50 rounded-2xl border border-stone-200">
+                      {images.map((img, index) => {
+                        const isPrimary = primaryImageUrl === img.url;
+                        return (
+                          <div
+                            key={index}
+                            className={`relative group aspect-square rounded-xl overflow-hidden border-2 bg-white shadow-xs flex flex-col justify-between p-1.5 ${
+                              isPrimary ? 'border-amber-500 ring-2 ring-amber-400/30' : 'border-stone-200'
+                            }`}
                           >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
+                            <img
+                              src={img.url}
+                              alt={`Product Photo ${index + 1}`}
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+
+                            {/* Top Badges & Controls */}
+                            <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
+                              {/* Primary status badge */}
+                              {isPrimary ? (
+                                <span className="bg-amber-500 text-stone-950 font-black text-[10px] px-2 py-0.5 rounded-md shadow-md pointer-events-auto">
+                                  Primary
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetPrimaryPhoto(img.url)}
+                                  className="bg-stone-900/90 hover:bg-amber-500 hover:text-stone-950 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-md pointer-events-auto transition-colors"
+                                >
+                                  Make Primary
+                                </button>
+                              )}
+
+                              {/* Prominent Red Remove Photo Button */}
+                              <button
+                                type="button"
+                                onClick={(e) => handleRemovePhoto(e, index)}
+                                className="p-1.5 bg-rose-600 hover:bg-rose-700 active:scale-90 text-white rounded-lg shadow-md pointer-events-auto transition-all flex items-center justify-center cursor-pointer"
+                                title="Remove / Delete this photo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Bottom Photo Number */}
+                            <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md backdrop-blur-xs">
+                              Photo #{index + 1}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : (
                   <div
@@ -791,6 +904,151 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                   <span>{editingProduct ? 'Save Changes' : 'Create Product'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* IN-APP CONFIRMATION MODAL FOR DELETING PRODUCT (Iframe-safe) */}
+      {productToDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => !isDeletingId && setProductToDelete(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white max-w-md w-full rounded-3xl p-6 shadow-2xl border border-stone-200 space-y-4 animate-in zoom-in-95 duration-150"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-black text-stone-900">Delete Product?</h3>
+              <p className="text-xs text-stone-600">
+                Are you sure you want to permanently delete{' '}
+                <strong className="text-stone-900 font-bold">"{productToDelete.name}"</strong>? This will remove the item from your store catalog and database immediately.
+              </p>
+            </div>
+
+            {/* Product mini preview */}
+            <div className="flex items-center gap-3 p-2.5 bg-stone-50 rounded-2xl border border-stone-200">
+              <img
+                src={productToDelete.primaryImage || productToDelete.images?.[0]?.url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100'}
+                alt={productToDelete.name}
+                referrerPolicy="no-referrer"
+                className="w-12 h-12 object-cover rounded-xl border border-stone-200"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-stone-900 truncate">{productToDelete.name}</p>
+                <p className="text-[11px] font-extrabold text-amber-600">৳{productToDelete.price.toLocaleString('en-BD')}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                disabled={isDeletingId === productToDelete.id}
+                onClick={() => setProductToDelete(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-100 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingId === productToDelete.id}
+                onClick={handleConfirmDeleteProduct}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isDeletingId === productToDelete.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Delete Product</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* IN-APP MODAL FOR ADDING PHOTO BY LINK/URL */}
+      {isUrlModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setIsUrlModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white max-w-md w-full rounded-3xl p-5 shadow-2xl border border-stone-200 space-y-4 animate-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-100 text-amber-800 rounded-xl">
+                  <ImageIcon className="w-4 h-4" />
+                </div>
+                <h4 className="text-sm font-bold text-stone-900">Add Photo via Link</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUrlModalOpen(false)}
+                className="p-1 text-stone-400 hover:text-stone-700 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmAddUrl} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Image Direct URL (JPG, PNG, WEBP)
+                </label>
+                <input
+                  type="url"
+                  required
+                  autoFocus
+                  value={customImageUrl}
+                  onChange={(e) => setCustomImageUrl(e.target.value)}
+                  placeholder="https://images.unsplash.com/..."
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
+                />
+              </div>
+
+              {customImageUrl.trim() && (
+                <div className="aspect-video w-full rounded-xl overflow-hidden border border-stone-200 bg-stone-50 flex items-center justify-center">
+                  <img
+                    src={customImageUrl.trim()}
+                    alt="Preview"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => setIsUrlModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!customImageUrl.trim()}
+                  className="px-4 py-2 bg-stone-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  Add to Product
                 </button>
               </div>
             </form>

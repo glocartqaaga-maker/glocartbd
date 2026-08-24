@@ -33,6 +33,34 @@ export interface CreateOrderParams {
 }
 
 /**
+ * Deep sanitization function to strip any `undefined` values from Firestore payloads
+ */
+function cleanFirestorePayload<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return null as unknown as T;
+  }
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((v) => v !== undefined)
+      .map((v) => cleanFirestorePayload(v)) as unknown as T;
+  }
+  if (typeof obj === 'object') {
+    // If it's a special object (FieldValue, Date, Timestamp, etc.), preserve it
+    if (obj.constructor && obj.constructor.name !== 'Object') {
+      return obj;
+    }
+    const clean: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        clean[key] = cleanFirestorePayload(value);
+      }
+    }
+    return clean as T;
+  }
+  return obj;
+}
+
+/**
  * Creates an order with atomic stock reduction and stock availability checks
  */
 export async function createOrderAtomically(params: CreateOrderParams): Promise<{ success: boolean; orderId: string; orderNumber: string }> {
@@ -43,24 +71,39 @@ export async function createOrderAtomically(params: CreateOrderParams): Promise<
   const orderNumber = 'GC-' + Date.now().toString().slice(-6) + Math.floor(100 + Math.random() * 900);
   const newOrderRef = doc(collection(db, 'orders'));
 
-  const orderData: Order = {
+  // Clean and sanitize items to ensure NO undefined fields (e.g. oldPrice or image)
+  const cleanItems: OrderItem[] = params.items.map((item) => {
+    const itemClean: Record<string, any> = {
+      productId: String(item.productId || ''),
+      name: String(item.name || 'Product'),
+      price: Number(item.price) || 0,
+      quantity: Math.max(1, Number(item.quantity) || 1),
+      image: String(item.image || ''),
+    };
+    if (item.oldPrice !== undefined && item.oldPrice !== null && !isNaN(Number(item.oldPrice))) {
+      itemClean.oldPrice = Number(item.oldPrice);
+    }
+    return itemClean as OrderItem;
+  });
+
+  const rawOrderData: Record<string, any> = {
     id: newOrderRef.id,
     orderNumber,
     customerId: params.customerId || '',
-    customerName: params.customerName.trim(),
-    phone: params.phone.trim(),
-    email: params.email?.trim() || '',
-    district: params.district.trim(),
-    area: params.area.trim(),
-    address: params.address.trim(),
-    note: params.note?.trim() || '',
-    items: params.items,
-    subtotal: params.subtotal,
-    deliveryCharge: params.deliveryCharge,
-    discount: params.discount,
-    grandTotal: params.grandTotal,
-    couponCode: params.couponCode || '',
-    paymentMethod: params.paymentMethod,
+    customerName: (params.customerName || '').trim(),
+    phone: (params.phone || '').trim(),
+    email: (params.email || '').trim(),
+    district: (params.district || 'Dhaka').trim(),
+    area: (params.area || '').trim(),
+    address: (params.address || '').trim(),
+    note: (params.note || '').trim(),
+    items: cleanItems,
+    subtotal: Number(params.subtotal) || 0,
+    deliveryCharge: Number(params.deliveryCharge) || 0,
+    discount: Number(params.discount) || 0,
+    grandTotal: Math.max(0, Number(params.grandTotal) || 0),
+    couponCode: (params.couponCode || '').trim(),
+    paymentMethod: params.paymentMethod || 'cod',
     paymentStatus: params.paymentMethod === 'cod' ? 'unpaid' : 'paid',
     status: 'pending',
     stockRestored: false,
@@ -71,6 +114,8 @@ export async function createOrderAtomically(params: CreateOrderParams): Promise<
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+
+  const orderData = cleanFirestorePayload(rawOrderData);
 
   try {
     await runTransaction(db, async (transaction) => {

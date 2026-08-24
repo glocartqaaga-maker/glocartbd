@@ -31,7 +31,14 @@ interface AuthContextType {
   }) => Promise<void>;
   login: (identifier: string, password: string) => Promise<void>;
   loginAsAdminQuick: () => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithPhoneQuick: (params: {
+    name: string;
+    phone: string;
+    district?: string;
+    area?: string;
+    address?: string;
+  }) => Promise<UserProfile>;
+  loginWithGoogle: () => Promise<User | null>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   resendVerification: () => Promise<void>;
@@ -123,7 +130,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updatedAt: new Date(),
         });
       } else {
-        setUserProfile(null);
+        // Check for persistent customer phone/guest session
+        try {
+          const savedCustomerSession = localStorage.getItem('glocart_customer_session');
+          if (savedCustomerSession) {
+            const parsed = JSON.parse(savedCustomerSession) as UserProfile;
+            setUserProfile(parsed);
+          } else {
+            setUserProfile(null);
+          }
+        } catch {
+          setUserProfile(null);
+        }
       }
       setLoading(false);
     });
@@ -142,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     address,
   }: {
     name: string;
-    email: string;
+    email?: string;
     phone: string;
     password: string;
     district?: string;
@@ -150,27 +168,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     address?: string;
   }) => {
     setError(null);
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    const cleanEmail = email?.trim().toLowerCase() || `${cleanPhone || Date.now()}@phone.glocartbd.com`;
+    const cleanName = name.trim() || 'Valued Customer';
+
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
       const firebaseUser = userCredential.user;
 
-      await updateProfile(firebaseUser, { displayName: name.trim() });
+      await updateProfile(firebaseUser, { displayName: cleanName });
 
-      // Send email verification
-      try {
-        await sendEmailVerification(firebaseUser);
-      } catch (e) {
-        console.log('Email verification sending note:', e);
+      // Send email verification if real email
+      if (email && email.includes('@') && !email.endsWith('@phone.glocartbd.com')) {
+        try {
+          await sendEmailVerification(firebaseUser);
+        } catch (e) {
+          console.log('Email verification sending note:', e);
+        }
       }
 
-      const isDevAdmin = email.trim().toLowerCase() === 'admin@glocartbd.com' || email.trim().toLowerCase() === 'glocart.qaaga@gmail.com';
+      const isDevAdmin = 
+        cleanEmail === 'admin@glocartbd.com' || 
+        cleanEmail === 'glocart.qaaga@gmail.com';
 
       const newProfile: UserProfile = {
         uid: firebaseUser.uid,
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
+        name: cleanName,
+        email: email?.trim().toLowerCase() || '',
         phone: phone.trim(),
-        district: district || '',
+        district: district || 'Dhaka',
         area: area || '',
         address: address || '',
         role: isDevAdmin ? 'admin' : 'customer',
@@ -186,11 +212,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) {
         console.warn('Note setting profile in Firestore:', e);
       }
+
+      try {
+        localStorage.setItem('glocart_customer_session', JSON.stringify(newProfile));
+      } catch {
+        // ignore
+      }
+
       setUserProfile(newProfile);
     } catch (err: any) {
       let friendlyMessage = err.message || 'Registration failed. Please check your details.';
       if (err.code === 'auth/email-already-in-use') {
-        friendlyMessage = 'An account with this email address already exists. Please login instead.';
+        friendlyMessage = 'An account with this email or mobile number already exists. Please sign in instead.';
       } else if (err.code === 'auth/weak-password') {
         friendlyMessage = 'Password must be at least 6 characters long.';
       } else if (err.code === 'auth/invalid-email') {
@@ -225,64 +258,155 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Login (Supports email, default dev username "admin", and robust admin fallback)
+  // Login (Seamlessly supports Email, Mobile Number, or Admin username)
   const login = async (identifier: string, password: string) => {
     setError(null);
-    const rawId = identifier.trim().toLowerCase();
-    let emailToUse = rawId;
+    const rawId = identifier.trim();
+    const rawLower = rawId.toLowerCase();
     
-    // Support default development admin login username 'admin'
-    if (rawId === 'admin') {
-      emailToUse = 'admin@glocartbd.com';
+    // Check if it's admin shorthand
+    if (rawLower === 'admin') {
+      const isValidAdminPass = password === 'glo123cart' || password === 'admin' || password === 'admin123';
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, 'admin@glocartbd.com', password);
+        localStorage.setItem('glocart_admin_session', 'true');
+        setIsLocalAdmin(true);
+        await fetchUserProfile(userCredential.user);
+        return;
+      } catch (err: any) {
+        if (isValidAdminPass) {
+          localStorage.setItem('glocart_admin_session', 'true');
+          setIsLocalAdmin(true);
+          const adminProfile: UserProfile = {
+            uid: 'admin_local_master',
+            name: 'GloCart Administrator',
+            email: 'admin@glocartbd.com',
+            phone: '+8801711000000',
+            role: 'admin',
+            status: 'active',
+            orderCount: 0,
+            totalSpent: 0,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          setUserProfile(adminProfile);
+          return;
+        }
+        throw new Error('Invalid Admin password.');
+      }
     }
 
-    const isAdminAttempt = 
-      emailToUse === 'admin@glocartbd.com' || 
-      rawId === 'admin' || 
-      emailToUse === 'glocart.qaaga@gmail.com';
+    // Check if identifier is a Bangladesh mobile number (e.g. 017..., +8801...)
+    const isPhoneLike = /^[0-9+ ]{10,16}$/.test(rawId) && !rawId.includes('@');
+    const cleanPhone = rawId.replace(/\D/g, '');
 
-    const isValidAdminPass = password === 'glo123cart' || password === 'admin' || password === 'admin123';
+    if (isPhoneLike) {
+      // 1. Try phone virtual email
+      try {
+        const phoneEmail = `${cleanPhone}@phone.glocartbd.com`;
+        const userCred = await signInWithEmailAndPassword(auth, phoneEmail, password);
+        await fetchUserProfile(userCred.user);
+        return;
+      } catch (phoneErr: any) {
+        // If not found as virtual email, check if user registered with phone in Firestore
+        try {
+          const { collection: col, query: q, where: wh, getDocs: gd } = await import('firebase/firestore');
+          const phoneQuery = q(col(db, 'users'), wh('phone', '==', rawId));
+          const snap = await gd(phoneQuery);
+          if (!snap.empty) {
+            const userDoc = snap.docs[0].data() as UserProfile;
+            if (userDoc.email) {
+              const userCred = await signInWithEmailAndPassword(auth, userDoc.email, password);
+              await fetchUserProfile(userCred.user);
+              return;
+            }
+          }
+        } catch {
+          // fallback
+        }
+      }
+    }
 
+    // Standard Email Sign-In
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, emailToUse, password);
+      const userCredential = await signInWithEmailAndPassword(auth, rawId, password);
       const firebaseUser = userCredential.user;
+      
+      const isAdminAttempt = 
+        firebaseUser.email?.toLowerCase() === 'admin@glocartbd.com' || 
+        firebaseUser.email?.toLowerCase() === 'glocart.qaaga@gmail.com';
+
       if (isAdminAttempt) {
         localStorage.setItem('glocart_admin_session', 'true');
         setIsLocalAdmin(true);
       }
       await fetchUserProfile(firebaseUser);
     } catch (err: any) {
-      // If admin credentials match, smoothly grant Admin access even if email auth is not active
-      if (isAdminAttempt && isValidAdminPass) {
-        localStorage.setItem('glocart_admin_session', 'true');
-        setIsLocalAdmin(true);
-        const adminProfile: UserProfile = {
-          uid: 'admin_local_master',
-          name: 'GloCart Administrator',
-          email: 'admin@glocartbd.com',
-          phone: '+8801711000000',
-          role: 'admin',
-          status: 'active',
-          orderCount: 0,
-          totalSpent: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        setUserProfile(adminProfile);
-        return;
-      }
-
-      let friendlyMessage = 'Login failed. Please check your credentials.';
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        friendlyMessage = 'Invalid email or password. Please verify and try again.';
+      let friendlyMessage = 'Sign-in failed. Please check your credentials.';
+      if (
+        err.code === 'auth/user-not-found' || 
+        err.code === 'auth/wrong-password' || 
+        err.code === 'auth/invalid-credential'
+      ) {
+        friendlyMessage = 'Invalid mobile number/email or password. Please verify and try again.';
       } else if (err.code === 'auth/too-many-requests') {
-        friendlyMessage = 'Too many failed login attempts. Please wait a moment or reset password.';
-      } else if (err.code === 'auth/operation-not-allowed') {
-        friendlyMessage = 'Email/Password sign-in is disabled. Please sign in with Google or use Quick Admin Access.';
+        friendlyMessage = 'Too many failed login attempts. Please wait a moment or reset your password.';
+      } else if (err.code === 'auth/invalid-email') {
+        friendlyMessage = 'Please enter a valid mobile number or email address.';
       }
       setError(friendlyMessage);
       throw new Error(friendlyMessage);
     }
+  };
+
+  // Quick Customer Login via Mobile Phone Number
+  const loginWithPhoneQuick = async (params: {
+    name: string;
+    phone: string;
+    district?: string;
+    area?: string;
+    address?: string;
+  }): Promise<UserProfile> => {
+    setError(null);
+    const cleanPhone = params.phone.trim().replace(/\D/g, '');
+    const cleanName = params.name.trim() || 'Valued Customer';
+    const guestUid = `cust_${cleanPhone || Date.now()}`;
+
+    const profile: UserProfile = {
+      uid: guestUid,
+      name: cleanName,
+      email: '',
+      phone: params.phone.trim(),
+      district: params.district || 'Dhaka',
+      area: params.area || '',
+      address: params.address || '',
+      role: 'customer',
+      status: 'active',
+      orderCount: 0,
+      totalSpent: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    try {
+      // Sync to firestore if online
+      const userRef = doc(db, 'users', guestUid);
+      await setDoc(userRef, {
+        ...profile,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Note saving quick customer profile to Firestore:', e);
+    }
+
+    try {
+      localStorage.setItem('glocart_customer_session', JSON.stringify(profile));
+    } catch {
+      // ignore
+    }
+
+    setUserProfile(profile);
+    return profile;
   };
 
   // Google Sign-In
@@ -306,9 +430,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       let friendly = 'Google sign-in could not be completed.';
       if (err.code === 'auth/popup-blocked') {
-        friendly = 'Pop-up window was blocked by your browser. Please allow popups or complete your order directly.';
+        friendly = 'Pop-up window was blocked by your browser. Please allow popups or sign in with your mobile number.';
       } else if (err.code === 'auth/unauthorized-domain') {
-        friendly = 'Google sign-in domain authorization notice. You can place your order directly with your mobile number.';
+        friendly = 'GOOGLE_UNAUTHORIZED_DOMAIN';
       } else if (err.message) {
         friendly = err.message;
       }
@@ -322,6 +446,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       localStorage.removeItem('glocart_admin_session');
+      localStorage.removeItem('glocart_customer_session');
     } catch {
       // ignore
     }
@@ -358,14 +483,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Update profile
   const updateCustomerProfile = async (data: Partial<UserProfile>) => {
-    if (!currentUser) return;
+    const targetUid = currentUser?.uid || userProfile?.uid;
+    if (!targetUid) return;
     try {
-      const userDocRef = doc(db, 'users', currentUser.uid);
-      await updateDoc(userDocRef, {
+      const userDocRef = doc(db, 'users', targetUid);
+      await setDoc(userDocRef, {
         ...data,
         updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      setUserProfile((prev) => {
+        const updated = prev ? { ...prev, ...data } : null;
+        if (updated) {
+          try {
+            localStorage.setItem('glocart_customer_session', JSON.stringify(updated));
+          } catch {
+            // ignore
+          }
+        }
+        return updated;
       });
-      setUserProfile((prev) => (prev ? { ...prev, ...data } : null));
     } catch (err: any) {
       setError(err.message || 'Failed to update profile.');
       throw err;
@@ -389,6 +526,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signup,
         login,
         loginAsAdminQuick,
+        loginWithPhoneQuick,
         loginWithGoogle,
         logout,
         resetPassword,

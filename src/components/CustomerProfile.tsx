@@ -61,20 +61,55 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
 
   // Fetch customer orders from Firestore
   useEffect(() => {
-    if (!isOpen || !currentUser) return;
+    if (!isOpen || (!currentUser && !userProfile)) return;
 
     const fetchCustomerOrders = async () => {
       setLoadingOrders(true);
+      const uid = currentUser?.uid || userProfile?.uid;
+      const customerPhone = userProfile?.phone?.trim();
+
       try {
-        const q = query(
-          collection(db, 'orders'),
-          where('customerId', '==', currentUser.uid)
-        );
-        const snap = await getDocs(q);
         const list: Order[] = [];
-        snap.forEach((doc) => {
-          list.push({ id: doc.id, ...doc.data() } as Order);
-        });
+        const seenIds = new Set<string>();
+
+        // 1. Query by customerId
+        if (uid) {
+          try {
+            const qUid = query(
+              collection(db, 'orders'),
+              where('customerId', '==', uid)
+            );
+            const snapUid = await getDocs(qUid);
+            snapUid.forEach((doc) => {
+              if (!seenIds.has(doc.id)) {
+                seenIds.add(doc.id);
+                list.push({ id: doc.id, ...doc.data() } as Order);
+              }
+            });
+          } catch (e) {
+            console.warn('Orders query by customerId note:', e);
+          }
+        }
+
+        // 2. Query by phone number if available
+        if (customerPhone) {
+          try {
+            const qPhone = query(
+              collection(db, 'orders'),
+              where('phone', '==', customerPhone)
+            );
+            const snapPhone = await getDocs(qPhone);
+            snapPhone.forEach((doc) => {
+              if (!seenIds.has(doc.id)) {
+                seenIds.add(doc.id);
+                list.push({ id: doc.id, ...doc.data() } as Order);
+              }
+            });
+          } catch (e) {
+            console.warn('Orders query by phone note:', e);
+          }
+        }
+
         // Sort newest first in memory
         list.sort((a, b) => {
           const timeA = a.createdAt?.toMillis?.() || 0;
@@ -90,9 +125,9 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
     };
 
     fetchCustomerOrders();
-  }, [isOpen, currentUser]);
+  }, [isOpen, currentUser, userProfile]);
 
-  if (!isOpen || !currentUser) return null;
+  if (!isOpen || (!currentUser && !userProfile)) return null;
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,7 +181,9 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
               <h2 className="text-base sm:text-lg font-bold text-stone-900 leading-tight">
                 {userProfile?.name || 'Customer Account'}
               </h2>
-              <p className="text-xs text-stone-500">{currentUser.email}</p>
+              <p className="text-xs text-stone-500">
+                {userProfile?.phone || currentUser?.email || userProfile?.email || 'Verified Customer'}
+              </p>
             </div>
           </div>
           <button

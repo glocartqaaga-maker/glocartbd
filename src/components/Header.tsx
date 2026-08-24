@@ -174,14 +174,14 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Customer Account / Login */}
             <div className="relative">
-              {currentUser ? (
+              {(currentUser || userProfile) ? (
                 <button
                   id="btn-user-profile-menu"
                   onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
                   className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-2 rounded-lg text-stone-800 hover:bg-stone-100 transition-colors"
                 >
                   <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-xs border border-amber-300">
-                    {userProfile?.name?.charAt(0).toUpperCase() || currentUser.email?.charAt(0).toUpperCase()}
+                    {userProfile?.name?.charAt(0).toUpperCase() || currentUser?.email?.charAt(0).toUpperCase() || 'U'}
                   </div>
                   <div className="hidden md:flex flex-col text-left">
                     <span className="text-xs font-semibold leading-tight truncate max-w-[100px]">
@@ -204,14 +204,14 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {/* Account Dropdown Menu */}
-              {isAccountMenuOpen && currentUser && (
+              {isAccountMenuOpen && (currentUser || userProfile) && (
                 <div 
                   id="account-dropdown-popup"
                   className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-stone-200 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                 >
                   <div className="px-4 py-2 border-b border-stone-100">
                     <p className="text-xs font-bold text-stone-900 truncate">{userProfile?.name || 'Customer'}</p>
-                    <p className="text-[11px] text-stone-500 truncate">{currentUser.email}</p>
+                    <p className="text-[11px] text-stone-500 truncate">{userProfile?.phone || currentUser?.email || userProfile?.email || 'Active Member'}</p>
                   </div>
 
                   <button

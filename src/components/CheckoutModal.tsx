@@ -91,7 +91,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         if (user.phoneNumber && !phone) setPhone(user.phoneNumber);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Google sign-in could not be completed.');
+      if (err.message === 'GOOGLE_UNAUTHORIZED_DOMAIN' || err.message?.includes('domain')) {
+        setErrorMessage('Google sign-in domain authorization notice: You can place your order directly by filling your mobile number & delivery address below!');
+      } else {
+        setErrorMessage(err.message || 'Google sign-in could not be completed. You can order directly with your phone number.');
+      }
     } finally {
       setIsGoogleLoading(false);
     }
@@ -124,14 +128,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      const orderItems: OrderItem[] = cartItems.map((item) => ({
-        productId: item.productId,
-        name: item.name,
-        price: item.price,
-        oldPrice: item.oldPrice,
-        quantity: item.quantity,
-        image: item.image,
-      }));
+      const orderItems: OrderItem[] = cartItems.map((item) => {
+        const oi: Record<string, any> = {
+          productId: item.productId || '',
+          name: item.name || 'Product',
+          price: Number(item.price) || 0,
+          quantity: Number(item.quantity) || 1,
+          image: item.image || '',
+        };
+        if (item.oldPrice !== undefined && item.oldPrice !== null && !isNaN(Number(item.oldPrice))) {
+          oi.oldPrice = Number(item.oldPrice);
+        }
+        return oi as OrderItem;
+      });
 
       const result = await createOrderAtomically({
         customerId: currentUser?.uid || `guest_${Date.now()}`,

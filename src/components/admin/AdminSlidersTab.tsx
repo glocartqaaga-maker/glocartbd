@@ -34,6 +34,8 @@ export const AdminSlidersTab: React.FC = () => {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+  const [sliderToDelete, setSliderToDelete] = useState<SliderBanner | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -98,15 +100,24 @@ export const AdminSlidersTab: React.FC = () => {
     }
   };
 
-  const handleDelete = async (slider: SliderBanner) => {
-    if (!window.confirm('Delete this banner?')) return;
+  const handleDeleteClick = (slider: SliderBanner) => {
+    setSliderToDelete(slider);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!sliderToDelete) return;
+    const target = sliderToDelete;
+    setIsDeletingId(target.id);
     try {
-      await deleteDoc(doc(db, 'sliders', slider.id));
-      setSliders((prev) => prev.filter((s) => s.id !== slider.id));
+      await deleteDoc(doc(db, 'sliders', target.id));
+      setSliders((prev) => prev.filter((s) => s.id !== target.id));
+      setSliderToDelete(null);
       setFeedback('Banner removed.');
       setTimeout(() => setFeedback(null), 3000);
     } catch (err: any) {
       alert('Delete error: ' + err.message);
+    } finally {
+      setIsDeletingId(null);
     }
   };
 
@@ -245,10 +256,11 @@ export const AdminSlidersTab: React.FC = () => {
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDelete(s)}
-                    className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    onClick={() => handleDeleteClick(s)}
+                    disabled={isDeletingId === s.id}
+                    className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {isDeletingId === s.id ? <Loader2 className="w-4 h-4 animate-spin text-rose-600" /> : <Trash2 className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
@@ -379,6 +391,59 @@ export const AdminSlidersTab: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* IN-APP CONFIRMATION MODAL FOR DELETING SLIDER BANNER */}
+      {sliderToDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => !isDeletingId && setSliderToDelete(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white max-w-md w-full rounded-3xl p-6 shadow-2xl border border-stone-200 space-y-4 animate-in zoom-in-95 duration-150"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-black text-stone-900">Delete Banner?</h3>
+              <p className="text-xs text-stone-600">
+                Are you sure you want to remove banner <strong className="text-stone-900">"{sliderToDelete.title || 'Untitled Banner'}"</strong>?
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                disabled={isDeletingId === sliderToDelete.id}
+                onClick={() => setSliderToDelete(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-100 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingId === sliderToDelete.id}
+                onClick={handleConfirmDelete}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isDeletingId === sliderToDelete.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

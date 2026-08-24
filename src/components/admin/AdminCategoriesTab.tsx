@@ -12,7 +12,7 @@ import {
   Upload,
   Image as ImageIcon
 } from 'lucide-react';
-import { doc, setDoc, deleteDoc, updateDoc, collection, getDocs, where, query, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, updateDoc, collection, getDocs, where, query, writeBatch, serverTimestamp, deleteField } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { uploadProductImage } from '../../lib/storage';
 import { Category } from '../../types';
@@ -37,6 +37,8 @@ export const AdminCategoriesTab: React.FC<AdminCategoriesTabProps> = ({
 
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -87,15 +89,24 @@ export const AdminCategoriesTab: React.FC<AdminCategoriesTabProps> = ({
     }
   };
 
-  const handleDeleteCategory = async (cat: Category) => {
-    if (!window.confirm(`Delete category "${cat.name}"?`)) return;
+  const handleDeleteCategoryClick = (cat: Category) => {
+    setCategoryToDelete(cat);
+  };
+
+  const handleConfirmDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+    const target = categoryToDelete;
+    setIsDeletingId(target.id);
     try {
-      await deleteDoc(doc(db, 'categories', cat.id));
-      setFeedback(`Category "${cat.name}" deleted.`);
+      await deleteDoc(doc(db, 'categories', target.id));
+      setCategoryToDelete(null);
+      setFeedback(`Category "${target.name}" deleted.`);
       onRefreshCategories();
       setTimeout(() => setFeedback(null), 3000);
     } catch (err: any) {
       alert('Failed to delete category: ' + err.message);
+    } finally {
+      setIsDeletingId(null);
     }
   };
 
@@ -113,15 +124,20 @@ export const AdminCategoriesTab: React.FC<AdminCategoriesTabProps> = ({
 
     try {
       const catId = editingCat ? editingCat.id : `cat-${Date.now()}`;
-      const payload: Category = {
+      const payload: Record<string, any> = {
         id: catId,
         name: name.trim(),
         slug: calculatedSlug,
-        image: image.trim() || undefined,
         sortOrder: Number(sortOrder) || 1,
         active: active,
         createdAt: editingCat?.createdAt || serverTimestamp(),
       };
+
+      if (image.trim()) {
+        payload.image = image.trim();
+      } else if (editingCat) {
+        payload.image = deleteField();
+      }
 
       await setDoc(doc(db, 'categories', catId), payload, { merge: true });
 
@@ -225,11 +241,12 @@ export const AdminCategoriesTab: React.FC<AdminCategoriesTabProps> = ({
                 <Edit3 className="w-4 h-4" />
               </button>
               <button
-                onClick={() => handleDeleteCategory(cat)}
-                className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                onClick={() => handleDeleteCategoryClick(cat)}
+                disabled={isDeletingId === cat.id}
+                className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
                 title="Delete"
               >
-                <Trash2 className="w-4 h-4" />
+                {isDeletingId === cat.id ? <Loader2 className="w-4 h-4 animate-spin text-rose-600" /> : <Trash2 className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -352,6 +369,59 @@ export const AdminCategoriesTab: React.FC<AdminCategoriesTabProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* IN-APP CONFIRMATION MODAL FOR DELETING CATEGORY */}
+      {categoryToDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => !isDeletingId && setCategoryToDelete(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white max-w-md w-full rounded-3xl p-6 shadow-2xl border border-stone-200 space-y-4 animate-in zoom-in-95 duration-150"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-black text-stone-900">Delete Category?</h3>
+              <p className="text-xs text-stone-600">
+                Are you sure you want to delete category <strong className="text-stone-900">"{categoryToDelete.name}"</strong>?
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                disabled={isDeletingId === categoryToDelete.id}
+                onClick={() => setCategoryToDelete(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-100 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingId === categoryToDelete.id}
+                onClick={handleConfirmDeleteCategory}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isDeletingId === categoryToDelete.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

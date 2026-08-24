@@ -13,7 +13,10 @@ import {
   Sparkles,
   ShieldCheck,
   Zap,
-  ArrowRight
+  ArrowRight,
+  Globe,
+  Copy,
+  Check
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BD_DISTRICTS } from '../lib/bd-locations';
@@ -21,7 +24,7 @@ import { BD_DISTRICTS } from '../lib/bd-locations';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'login' | 'register' | 'forgot' | 'admin';
+  initialTab?: 'login' | 'phone' | 'register' | 'forgot' | 'admin';
   onSuccess?: () => void;
   onOpenAdmin?: () => void;
 }
@@ -33,11 +36,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSuccess,
   onOpenAdmin,
 }) => {
-  const { signup, login, loginAsAdminQuick, loginWithGoogle, resetPassword, error, clearError, isAdmin } = useAuth();
-  const [tab, setTab] = useState<'login' | 'register' | 'forgot' | 'admin'>(initialTab);
+  const { 
+    signup, 
+    login, 
+    loginAsAdminQuick, 
+    loginWithPhoneQuick, 
+    loginWithGoogle, 
+    resetPassword, 
+    error, 
+    clearError, 
+    isAdmin 
+  } = useAuth();
+  
+  const [tab, setTab] = useState<'login' | 'phone' | 'register' | 'forgot' | 'admin'>(initialTab);
   const [isLoading, setIsLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
   // Form states
   const [email, setEmail] = useState('');
@@ -54,11 +69,65 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleTabSwitch = (newTab: 'login' | 'register' | 'forgot' | 'admin') => {
+  const handleTabSwitch = (newTab: 'login' | 'phone' | 'register' | 'forgot' | 'admin') => {
     setTab(newTab);
     setLocalError(null);
     setSuccessMessage(null);
     clearError();
+  };
+
+  const isDomainAuthError = 
+    localError === 'GOOGLE_UNAUTHORIZED_DOMAIN' || 
+    error === 'GOOGLE_UNAUTHORIZED_DOMAIN' ||
+    localError?.includes('domain authorization') ||
+    error?.includes('domain authorization');
+
+  const handleCopyCurrentDomain = () => {
+    try {
+      const hostname = window.location.hostname;
+      navigator.clipboard.writeText(hostname);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 2500);
+    } catch {
+      // fallback
+    }
+  };
+
+  // Quick Customer Login via Mobile Phone
+  const handlePhoneLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    setSuccessMessage(null);
+
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setLocalError('Please enter a valid Bangladesh mobile number (e.g. 017XXXXXXXX).');
+      return;
+    }
+    if (!name.trim()) {
+      setLocalError('Please enter your name.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await loginWithPhoneQuick({
+        name,
+        phone,
+        district,
+        area: area || currentDistrictObj.areas[0] || '',
+        address,
+      });
+      setSuccessMessage('Logged in successfully with mobile number!');
+      setTimeout(() => {
+        onSuccess?.();
+        onClose();
+      }, 500);
+    } catch (err: any) {
+      setLocalError(err.message || 'Mobile sign-in failed.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -195,12 +264,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div>
             <h2 className="text-base sm:text-lg font-bold text-stone-900">
               {tab === 'login' && 'Sign In to GloCart BD'}
+              {tab === 'phone' && 'Fast Mobile Sign-In'}
               {tab === 'register' && 'Create Customer Account'}
               {tab === 'forgot' && 'Reset Password'}
               {tab === 'admin' && 'Admin Portal Access'}
             </h2>
             <p className="text-xs text-stone-500 mt-0.5">
               {tab === 'login' && 'Access your orders, cart, and profile'}
+              {tab === 'phone' && 'Place orders directly with your mobile number'}
               {tab === 'register' && 'Join GloCart BD for instant checkout & tracking'}
               {tab === 'forgot' && 'Enter your registered email to receive reset link'}
               {tab === 'admin' && 'Sign in to manage products, categories, orders & settings'}
@@ -219,6 +290,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {tab !== 'forgot' && (
           <div className="flex border-b border-stone-200 bg-stone-100/50 p-1">
             <button
+              id="tab-btn-phone"
+              onClick={() => handleTabSwitch('phone')}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
+                tab === 'phone'
+                  ? 'bg-white text-stone-950 shadow-xs'
+                  : 'text-stone-500 hover:text-stone-900'
+              }`}
+            >
+              <Phone className="w-3.5 h-3.5 text-amber-600" />
+              Mobile
+            </button>
+            <button
               id="tab-btn-login"
               onClick={() => handleTabSwitch('login')}
               className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
@@ -227,7 +310,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   : 'text-stone-500 hover:text-stone-900'
               }`}
             >
-              Sign In
+              Email/Pass
             </button>
             <button
               id="tab-btn-register"
@@ -256,8 +339,61 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         )}
 
         <div className="p-5 sm:p-6 space-y-4">
-          {/* Notifications */}
-          {(localError || error) && (
+          {/* Domain Authorization Notice Interactive Banner */}
+          {isDomainAuthError && (
+            <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl space-y-3 animate-in fade-in">
+              <div className="flex items-start gap-2.5">
+                <Globe className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-amber-950">
+                    Google Sign-In Domain Authorization Notice
+                  </h4>
+                  <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed">
+                    গুগল সাইন-ইন ব্যবহারের জন্য এই ডোমেনটি ফায়ারবেস কনসোলের <b>Authorized Domains</b> তালিকায় যুক্ত থাকতে হবে।
+                  </p>
+                </div>
+              </div>
+
+              {/* Current Hostname and Copy button */}
+              <div className="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-amber-200 text-xs">
+                <span className="font-mono text-stone-700 text-[11px] truncate select-all">{window.location.hostname}</span>
+                <button
+                  type="button"
+                  onClick={handleCopyCurrentDomain}
+                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-lg text-[11px] shrink-0 transition-colors flex items-center gap-1"
+                >
+                  {copiedDomain ? <Check className="w-3 h-3 text-stone-950" /> : <Copy className="w-3 h-3" />}
+                  {copiedDomain ? 'Copied!' : 'Copy Domain'}
+                </button>
+              </div>
+
+              <div className="text-[11px] text-stone-600 bg-amber-100/70 p-2.5 rounded-xl space-y-1">
+                <p className="font-bold text-stone-900">অ্যাডমিন / কনফিগারেশন ধাপ:</p>
+                <p className="text-[10px] text-stone-700 font-mono">
+                  Firebase Console &gt; Authentication &gt; Settings &gt; Authorized domains &gt; Add domain
+                </p>
+              </div>
+
+              {/* Customer Direct Mobile Solution */}
+              <div className="pt-1.5 border-t border-amber-200/90">
+                <p className="text-[11px] text-amber-950 font-semibold mb-2">
+                  ⚡ গ্রাহকদের জন্য গুগল লগইনের কোনো প্রয়োজন নেই! সরাসরি মোবাইল নম্বর দিয়ে ১ ক্লিকে লগইন বা অর্ডার প্লেস করুন:
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleTabSwitch('phone')}
+                  className="w-full py-2.5 px-3 bg-stone-900 hover:bg-black text-amber-400 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs transition-colors"
+                >
+                  <Phone className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Continue with Mobile Number (মোবাইল দিয়ে অর্ডার)</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Standard Notifications */}
+          {!isDomainAuthError && (localError || error) && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
               <span>{localError || error}</span>
@@ -269,6 +405,116 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <span>{successMessage}</span>
             </div>
+          )}
+
+          {/* PHONE QUICK LOGIN TAB */}
+          {tab === 'phone' && (
+            <form onSubmit={handlePhoneLoginSubmit} className="space-y-3.5">
+              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
+                🚀 <b>সরাসরি মোবাইল নম্বর দিয়ে অর্ডার করুন:</b> কোনো পাসওয়ার্ড বা গুগল একাউন্টের ঝামেলা ছাড়াই মাত্র ১ ক্লিকে আপনার অর্ডার কনফার্ম করতে পারবেন।
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Full Name (আপনার নাম) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="input-phone-name"
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Tanvir Ahmed"
+                    className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
+                  />
+                  <UserIcon className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Mobile Number (মোবাইল নম্বর) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="input-phone-number"
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="017XXXXXXXX"
+                    className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
+                  />
+                  <Phone className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">District (জেলা)</label>
+                  <select
+                    id="input-phone-district"
+                    value={district}
+                    onChange={(e) => {
+                      setDistrict(e.target.value);
+                      const dObj = BD_DISTRICTS.find((d) => d.name === e.target.value);
+                      setArea(dObj?.areas[0] || '');
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
+                  >
+                    {BD_DISTRICTS.map((d) => (
+                      <option key={d.name} value={d.name}>
+                        {d.name} {d.isDhaka ? '(Dhaka)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Area / Thana (থানা)</label>
+                  <input
+                    id="input-phone-area"
+                    type="text"
+                    value={area}
+                    onChange={(e) => setArea(e.target.value)}
+                    placeholder="e.g. Mirpur / Uttara"
+                    className="w-full px-3 py-2 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Full Address (ঠিকানা)</label>
+                <div className="relative">
+                  <input
+                    id="input-phone-address"
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="House, Road, Block..."
+                    className="w-full pl-9 pr-3 py-2 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
+                  />
+                  <MapPin className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                </div>
+              </div>
+
+              <button
+                id="btn-submit-phone-login"
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-xl text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Phone className="w-4 h-4" />
+                    <span>Continue with Mobile (সাইন ইন ও অর্ডার)</span>
+                  </>
+                )}
+              </button>
+            </form>
           )}
 
           {/* ADMIN TAB */}
@@ -380,7 +626,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <form onSubmit={handleLoginSubmit} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1">
-                  Email or Admin Username
+                  Mobile Number, Email, or Admin ID
                 </label>
                 <div className="relative">
                   <input
@@ -389,7 +635,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. yourname@gmail.com or admin"
+                    placeholder="e.g. 017XXXXXXXX or user@gmail.com"
                     className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
                   />
                   <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -490,7 +736,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {tab === 'register' && (
             <form onSubmit={handleRegisterSubmit} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">Full Name</label>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Full Name (আপনার নাম) <span className="text-rose-500">*</span>
+                </label>
                 <div className="relative">
                   <input
                     id="input-reg-name"
@@ -507,7 +755,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">BD Mobile Number</label>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Mobile Number <span className="text-rose-500">*</span>
+                  </label>
                   <div className="relative">
                     <input
                       id="input-reg-phone"
@@ -523,12 +773,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">Email Address</label>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Email Address <span className="text-stone-400 font-normal">(Optional)</span>
+                  </label>
                   <div className="relative">
                     <input
                       id="input-reg-email"
                       type="email"
-                      required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="name@gmail.com"
