@@ -146,8 +146,8 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Track Order</span>
             </button>
 
-            {/* Admin Dashboard Switch Button */}
-            {isAdmin ? (
+            {/* Admin Dashboard Switch Button (Only shown when already logged in as Admin) */}
+            {isAdmin && (
               <button
                 id="btn-admin-portal-switch"
                 onClick={handleAdminClick}
@@ -159,16 +159,6 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span className="hidden sm:inline">{isAdminView ? 'Storefront' : 'Admin Panel'}</span>
-              </button>
-            ) : (
-              <button
-                id="btn-admin-quick-header"
-                onClick={() => onOpenAuth('admin')}
-                className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
-                title="Store Administrator Portal"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                <span>Admin</span>
               </button>
             )}
 
@@ -402,7 +392,7 @@ export const Header: React.FC<HeaderProps> = ({
                       setIsMobileMenuOpen(false);
                       onOpenAuth('login');
                     }}
-                    className="flex-1 py-2 text-xs font-bold bg-amber-500 text-stone-950 rounded-lg text-center"
+                    className="flex-1 py-2.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-stone-950 rounded-lg text-center shadow-xs"
                   >
                     Sign In
                   </button>
@@ -411,21 +401,11 @@ export const Header: React.FC<HeaderProps> = ({
                       setIsMobileMenuOpen(false);
                       onOpenAuth('register');
                     }}
-                    className="flex-1 py-2 text-xs font-bold bg-stone-100 text-stone-800 rounded-lg text-center"
+                    className="flex-1 py-2.5 text-xs font-bold bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-center"
                   >
                     Register
                   </button>
                 </div>
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    onOpenAuth('admin');
-                  }}
-                  className="w-full py-2 text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg text-center flex items-center justify-center gap-1.5"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                  Admin Login
-                </button>
               </div>
             )}
           </div>

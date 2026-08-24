@@ -208,8 +208,39 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
         {/* Modal Form Content */}
         <form onSubmit={handleSubmitOrder} className="p-4 sm:p-6 space-y-5 max-h-[80vh] overflow-y-auto">
-          {/* Auth State & Quick Google Sign-In Banner */}
-          {!currentUser ? (
+          {/* Auth State: Show user info when logged in, or Sign In banner when guest */}
+          {(currentUser || userProfile) ? (
+            <div className="p-3 bg-emerald-50 border border-emerald-200/90 rounded-2xl flex items-center justify-between gap-3 text-xs animate-in fade-in">
+              <div className="flex items-center gap-3">
+                {currentUser?.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt={userProfile?.name || currentUser.displayName || 'User'}
+                    className="w-10 h-10 rounded-full object-cover border-2 border-emerald-400 shadow-2xs shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm shadow-2xs shrink-0 border-2 border-emerald-400">
+                    {(userProfile?.name || currentUser?.displayName || currentUser?.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-bold text-stone-900 text-xs sm:text-sm">
+                      {userProfile?.name || currentUser?.displayName || 'Valued Customer'}
+                    </p>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  </div>
+                  <p className="text-[11px] text-stone-500">
+                    {userProfile?.phone || currentUser?.email || userProfile?.email || 'Logged In Account'}
+                  </p>
+                </div>
+              </div>
+              <span className="text-[11px] text-emerald-700 bg-emerald-100/90 font-bold px-2.5 py-1 rounded-lg border border-emerald-300/60 shrink-0">
+                Verified Account
+              </span>
+            </div>
+          ) : (
             <div className="p-3.5 bg-gradient-to-r from-amber-50 to-stone-50 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2.5 text-stone-800">
                 <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 font-bold">
@@ -250,16 +281,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   Password Sign In
                 </button>
               </div>
-            </div>
-          ) : (
-            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-900">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Ordering as <b>{userProfile?.name || currentUser.displayName || currentUser.email}</b></span>
-              </div>
-              <span className="text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md font-medium">
-                Verified Account
-              </span>
             </div>
           )}
 
