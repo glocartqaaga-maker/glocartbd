@@ -8,16 +8,19 @@ import {
   signInWithPopup,
   sendPasswordResetEmail,
   sendEmailVerification,
-  updateProfile
+  updateProfile,
+  updatePassword,
+  updateEmail
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
-import { UserProfile } from '../types';
+import { UserProfile, AdminAuthCredentials } from '../types';
 
 interface AuthContextType {
   currentUser: User | null;
   userProfile: UserProfile | null;
   isAdmin: boolean;
+  adminCredentials: AdminAuthCredentials;
   loading: boolean;
   error: string | null;
   signup: (params: {
@@ -43,6 +46,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   resendVerification: () => Promise<void>;
   updateCustomerProfile: (data: Partial<UserProfile>) => Promise<void>;
+  updateAdminCredentials: (creds: { username?: string; email?: string; password: string }) => Promise<void>;
   clearError: () => void;
 }
 
@@ -51,6 +55,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [adminCredentials, setAdminCredentials] = useState<AdminAuthCredentials>(() => {
+    try {
+      const saved = localStorage.getItem('glocart_admin_credentials');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // fallback
+    }
+    return {
+      username: 'admin',
+      email: 'admin@glocartbd.com',
+      password: 'glo123cart',
+    };
+  });
   const [isLocalAdmin, setIsLocalAdmin] = useState<boolean>(() => {
     try {
       return localStorage.getItem('glocart_admin_session') === 'true';
@@ -62,6 +81,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<string | null>(null);
 
   const clearError = () => setError(null);
+
+  // Listen to Admin Credentials from Firestore in real-time
+  useEffect(() => {
+    const unsubAdminAuth = onSnapshot(
+      doc(db, 'settings', 'admin_auth'),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data() as AdminAuthCredentials;
+          const merged: AdminAuthCredentials = {
+            username: data.username || 'admin',
+            email: data.email || 'admin@glocartbd.com',
+            password: data.password || 'glo123cart',
+            lastChangedAt: data.lastChangedAt || null,
+            changedBy: data.changedBy || 'Administrator',
+          };
+          setAdminCredentials(merged);
+          try {
+            localStorage.setItem('glocart_admin_credentials', JSON.stringify(merged));
+            localStorage.setItem('glocart_admin_username', merged.username);
+            localStorage.setItem('glocart_admin_email', merged.email);
+            if (merged.password) {
+              localStorage.setItem('glocart_admin_password', merged.password);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      },
+      (err) => {
+        console.warn('Note listening to admin_auth in Firestore:', err);
+      }
+    );
+
+    return () => unsubAdminAuth();
+  }, []);
 
   // Fetch or sync user profile from Firestore
   const fetchUserProfile = async (firebaseUser: User) => {
@@ -354,11 +408,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const rawId = identifier.trim();
     const rawLower = rawId.toLowerCase();
     
-    // Check if it's admin shorthand
-    if (rawLower === 'admin') {
-      const isValidAdminPass = password === 'glo123cart' || password === 'admin' || password === 'admin123';
+    // Check if it's admin username or admin email
+    const configuredAdminUsername = (adminCredentials.username || 'admin').toLowerCase();
+    const configuredAdminEmail = (adminCredentials.email || 'admin@glocartbd.com').toLowerCase();
+    const isConfiguredAdminId = 
+      rawLower === configuredAdminUsername || 
+      rawLower === 'admin' || 
+      rawLower === configuredAdminEmail || 
+      rawLower === 'admin@glocartbd.com' ||
+      rawLower === 'info.glocartbd@gmail.com' ||
+      rawLower === 'glocart.qaaga@gmail.com';
+
+    if (isConfiguredAdminId) {
+      const isValidAdminPass = 
+        password === adminCredentials.password || 
+        password === 'glo123cart' || 
+        password === 'admin' || 
+        password === 'admin123';
+
       try {
-        const userCredential = await signInWithEmailAndPassword(auth, 'admin@glocartbd.com', password);
+        const userCredential = await signInWithEmailAndPassword(auth, adminCredentials.email || 'admin@glocartbd.com', password);
         localStorage.setItem('glocart_admin_session', 'true');
         setIsLocalAdmin(true);
         await fetchUserProfile(userCredential.user);
@@ -370,7 +439,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const adminProfile: UserProfile = {
             uid: 'admin_local_master',
             name: 'GloCart Administrator',
-            email: 'admin@glocartbd.com',
+            email: adminCredentials.email || 'admin@glocartbd.com',
             phone: '+8801711000000',
             role: 'admin',
             status: 'active',
@@ -382,7 +451,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUserProfile(adminProfile);
           return;
         }
-        throw new Error('Invalid Admin password.');
+        throw new Error('Invalid Admin password or username.');
       }
     }
 
@@ -646,6 +715,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Update Admin credentials (username, email, password)
+  const updateAdminCredentials = async (params: {
+    username?: string;
+    email?: string;
+    password?: string;
+  }) => {
+    setError(null);
+    const newUsername = (params.username || adminCredentials.username || 'admin').trim();
+    const newEmail = (params.email || adminCredentials.email || 'admin@glocartbd.com').trim().toLowerCase();
+    const newPassword = params.password?.trim() || adminCredentials.password || 'glo123cart';
+
+    if (!newUsername) {
+      throw new Error('Admin username / ID cannot be empty.');
+    }
+    if (newPassword.length < 6) {
+      throw new Error('Admin password must be at least 6 characters long.');
+    }
+
+    const updated: AdminAuthCredentials = {
+      username: newUsername,
+      email: newEmail,
+      password: newPassword,
+      lastChangedAt: new Date().toISOString(),
+      changedBy: userProfile?.name || 'Administrator',
+    };
+
+    try {
+      // Save directly to Firestore settings collection
+      const adminDocRef = doc(db, 'settings', 'admin_auth');
+      await setDoc(adminDocRef, {
+        ...updated,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (dbErr: any) {
+      console.warn('Note saving admin credentials to Firestore:', dbErr);
+    }
+
+    // Also update current Firebase user password if active
+    if (currentUser && currentUser.email?.toLowerCase() === newEmail) {
+      try {
+        await updatePassword(currentUser, newPassword);
+      } catch (pwdErr) {
+        console.warn('Note updating Firebase Auth password:', pwdErr);
+      }
+    }
+
+    // Cache locally for instant offline/fallback access
+    try {
+      localStorage.setItem('glocart_admin_credentials', JSON.stringify(updated));
+      localStorage.setItem('glocart_admin_username', newUsername);
+      localStorage.setItem('glocart_admin_email', newEmail);
+      localStorage.setItem('glocart_admin_password', newPassword);
+    } catch {
+      // ignore
+    }
+
+    setAdminCredentials(updated);
+  };
+
   const isAdmin = 
     isLocalAdmin ||
     userProfile?.role === 'admin' ||
@@ -659,6 +787,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentUser,
         userProfile,
         isAdmin,
+        adminCredentials,
         loading,
         error,
         signup,
@@ -670,6 +799,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetPassword,
         resendVerification,
         updateCustomerProfile,
+        updateAdminCredentials,
         clearError,
       }}
     >

@@ -39,7 +39,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     resetPassword, 
     error, 
     clearError,
-    isAdmin 
+    isAdmin,
+    adminCredentials
   } = useAuth();
   
   const [viewMode, setViewMode] = useState<'login' | 'register' | 'forgot'>(
@@ -115,11 +116,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       await login(cleanId, password);
       
       const cleanLower = cleanId.toLowerCase();
+      const configuredUser = (adminCredentials?.username || 'admin').toLowerCase();
+      const configuredEmail = (adminCredentials?.email || 'admin@glocartbd.com').toLowerCase();
       const isTryingAdmin = 
+        cleanLower === configuredUser ||
         cleanLower === 'admin' || 
+        cleanLower === configuredEmail ||
         cleanLower === 'admin@glocartbd.com' || 
         cleanLower === 'info.glocartbd@gmail.com' || 
         cleanLower === 'glocart.qaaga@gmail.com' ||
+        password === adminCredentials?.password ||
         password === 'glo123cart';
 
       setSuccessMessage('Signed in successfully!');

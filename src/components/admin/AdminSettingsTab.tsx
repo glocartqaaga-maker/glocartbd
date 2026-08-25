@@ -19,19 +19,26 @@ import {
   Image as ImageIcon,
   RotateCcw,
   Eye,
+  EyeOff,
   Link as LinkIcon,
   Sparkles,
-  Check
+  Check,
+  Lock,
+  User,
+  Shield,
+  KeyRound
 } from 'lucide-react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
 import { StoreSettings } from '../../types';
 import { uploadLogoImage, deleteStorageImage } from '../../lib/storage';
 import defaultLogoImage from '../../assets/images/glocart_drive_logo.png';
 
 export const AdminSettingsTab: React.FC = () => {
   const { storeSettings, refreshStoreSettings } = useCart();
+  const { adminCredentials, updateAdminCredentials } = useAuth();
 
   const [settings, setSettings] = useState<StoreSettings>(storeSettings);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,15 +55,69 @@ export const AdminSettingsTab: React.FC = () => {
   const [isTestingCourier, setIsTestingCourier] = useState(false);
   const [courierStatusMsg, setCourierStatusMsg] = useState<string | null>(null);
 
+  // Admin Credentials State
+  const [adminUsername, setAdminUsername] = useState(adminCredentials?.username || 'admin');
+  const [adminEmail, setAdminEmail] = useState(adminCredentials?.email || 'admin@glocartbd.com');
+  const [adminNewPassword, setAdminNewPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [isUpdatingAdminAuth, setIsUpdatingAdminAuth] = useState(false);
+  const [adminAuthFeedback, setAdminAuthFeedback] = useState<string | null>(null);
+  const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
+
   useEffect(() => {
     setSettings(storeSettings);
   }, [storeSettings]);
+
+  useEffect(() => {
+    if (adminCredentials) {
+      setAdminUsername(adminCredentials.username || 'admin');
+      setAdminEmail(adminCredentials.email || 'admin@glocartbd.com');
+    }
+  }, [adminCredentials]);
 
   const handleChange = (field: keyof StoreSettings, value: any) => {
     setSettings((prev) => ({
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handleUpdateAdminAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminAuthFeedback(null);
+    setAdminAuthError(null);
+
+    const cleanUsername = adminUsername.trim();
+    const cleanEmail = adminEmail.trim().toLowerCase();
+
+    if (!cleanUsername) {
+      setAdminAuthError('Username cannot be empty.');
+      return;
+    }
+    if (!cleanEmail) {
+      setAdminAuthError('Email cannot be empty.');
+      return;
+    }
+    if (adminNewPassword && adminNewPassword.length < 6) {
+      setAdminAuthError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setIsUpdatingAdminAuth(true);
+    try {
+      await updateAdminCredentials({
+        username: cleanUsername,
+        email: cleanEmail,
+        password: adminNewPassword || adminCredentials?.password || 'glo123cart',
+      });
+      setAdminAuthFeedback('Changes saved successfully!');
+      setAdminNewPassword('');
+      setTimeout(() => setAdminAuthFeedback(null), 5000);
+    } catch (err: any) {
+      setAdminAuthError(err.message || 'Failed to save changes.');
+    } finally {
+      setIsUpdatingAdminAuth(false);
+    }
   };
 
   const handleLogoFileUpload = async (file: File) => {
@@ -721,16 +782,113 @@ export const AdminSettingsTab: React.FC = () => {
           )}
         </div>
 
-        {/* Submit button */}
-        <button
-          type="submit"
-          disabled={isSaving}
-          className="w-full sm:w-auto px-8 py-3 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs sm:text-sm rounded-2xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
-        >
-          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          <span>Save All Settings</span>
-        </button>
+        {/* Submit Store Settings button */}
+        <div className="flex items-center justify-between gap-4 pt-2">
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="w-full sm:w-auto px-8 py-3 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs sm:text-sm rounded-2xl shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <span>Save Store Settings</span>
+          </button>
+        </div>
       </form>
+
+      {/* 6. Admin Credentials */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-stone-200 shadow-sm space-y-6">
+        <div>
+          <h3 className="font-black text-stone-900 text-base flex items-center gap-2">
+            <Shield className="w-5 h-5 text-stone-700" />
+            <span>6. Admin Credentials (অ্যাডমিন আইডি ও পাসওয়ার্ড)</span>
+          </h3>
+        </div>
+
+        {adminAuthFeedback && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+            <span className="font-semibold">{adminAuthFeedback}</span>
+          </div>
+        )}
+
+        {adminAuthError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span className="font-semibold">{adminAuthError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleUpdateAdminAuth} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Username box */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-stone-500" />
+                <span>Username</span>
+              </label>
+              <input
+                type="text"
+                value={adminUsername}
+                onChange={(e) => setAdminUsername(e.target.value)}
+                placeholder="Username"
+                className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:outline-none focus:border-amber-500 font-medium"
+                required
+              />
+            </div>
+
+            {/* Email box */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-stone-500" />
+                <span>Email</span>
+              </label>
+              <input
+                type="email"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:outline-none focus:border-amber-500 font-medium"
+                required
+              />
+            </div>
+
+            {/* Password box */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-stone-500" />
+                <span>Password</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showAdminPassword ? 'text' : 'password'}
+                  value={adminNewPassword}
+                  onChange={(e) => setAdminNewPassword(e.target.value)}
+                  placeholder="New Password (optional)"
+                  className="w-full px-4 py-2.5 pr-10 rounded-xl border border-stone-200 text-xs sm:text-sm focus:outline-none focus:border-amber-500 font-medium"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPassword(!showAdminPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                >
+                  {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={isUpdatingAdminAuth}
+              className="w-full sm:w-auto px-8 py-2.5 bg-stone-900 hover:bg-black text-amber-400 font-black text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+            >
+              {isUpdatingAdminAuth ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span>Save Changes</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

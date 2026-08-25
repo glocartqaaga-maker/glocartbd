@@ -155,3 +155,11 @@ export interface StoreSettings {
   steadfastSecretKey?: string;
   autoBookSteadfast?: boolean;
 }
+
+export interface AdminAuthCredentials {
+  username: string;
+  email: string;
+  password?: string;
+  lastChangedAt?: any;
+  changedBy?: string;
+}

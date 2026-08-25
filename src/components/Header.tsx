@@ -52,6 +52,10 @@ export const Header: React.FC<HeaderProps> = ({
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
 
   const handleAdminClick = () => {
+    if (!isAdmin) {
+      onOpenAuth('login');
+      return;
+    }
     if (typeof onToggleAdmin === 'function') {
       onToggleAdmin();
     } else if (typeof onOpenAdmin === 'function') {
