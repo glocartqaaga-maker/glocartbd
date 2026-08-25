@@ -125,6 +125,8 @@ export interface CartItem {
 export interface StoreSettings {
   id?: string;
   storeName: string;
+  logoUrl?: string;
+  logoStoragePath?: string;
   phone: string;
   email: string;
   facebook: string;

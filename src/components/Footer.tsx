@@ -68,19 +68,25 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory
           <div className="space-y-4 md:col-span-1">
             <div className="flex items-center gap-2.5">
               <img
-                src={glocartLogo}
-                alt="GloCart BD Logo"
+                src={storeSettings.logoUrl || glocartLogo}
+                alt={`${storeSettings.storeName || 'GloCart BD'} Logo`}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  if (!target.src.endsWith('/logo.png')) {
+                  if (target.src !== glocartLogo) {
+                    target.src = glocartLogo;
+                  } else if (!target.src.endsWith('/logo.png')) {
                     target.src = '/logo.png';
                   }
                 }}
                 className="w-8 h-8 rounded-lg object-cover shadow-sm shrink-0"
               />
               <span className="font-bold text-lg text-white tracking-tight">
-                GloCart<span className="text-amber-500">BD</span>
+                {storeSettings.storeName ? (
+                  storeSettings.storeName
+                ) : (
+                  <>GloCart<span className="text-amber-500">BD</span></>
+                )}
               </span>
             </div>
             <p className="text-xs text-stone-400 leading-relaxed">

@@ -7,6 +7,149 @@ export interface UploadProgressCallback {
 }
 
 /**
+ * Optimizes a logo image, preserving PNG/SVG/WebP transparency and crisp vectors.
+ */
+export async function compressLogoToDataUrl(file: File, maxWidth = 800): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read file.'));
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const isPngOrSvg = file.type === 'image/png' || file.type === 'image/svg+xml' || file.type === 'image/webp';
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(event.target?.result as string);
+            return;
+          }
+
+          if (isPngOrSvg) {
+            // Keep background transparent
+            ctx.clearRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/png');
+            resolve(dataUrl);
+          } else {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            resolve(dataUrl);
+          }
+        } catch (canvasErr) {
+          console.warn('Logo canvas optimization fallback:', canvasErr);
+          resolve(event.target?.result as string);
+        }
+      };
+      img.onerror = () => resolve(event.target?.result as string);
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error(`Failed to read logo "${file.name}".`));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Uploads a store logo image file.
+ */
+export async function uploadLogoImage(
+  file: File,
+  onProgress?: UploadProgressCallback
+): Promise<{ url: string; storagePath?: string }> {
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error(`Logo "${file.name}" exceeds maximum allowed size of 10 MB.`);
+  }
+
+  if (onProgress) onProgress(25, file.name);
+
+  const optimizedDataUrl = await compressLogoToDataUrl(file);
+  if (onProgress) onProgress(60, file.name);
+
+  const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const timestamp = Date.now();
+  const storagePath = `brand/logo_${timestamp}_${cleanFileName}`;
+
+  const isPng = file.type === 'image/png' || file.type === 'image/svg+xml' || file.type === 'image/webp';
+  const mimeType = isPng ? 'image/png' : 'image/jpeg';
+
+  const tryFirebaseStorage = async (): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 2500);
+
+      try {
+        const storageRef = ref(storage, storagePath);
+        fetch(optimizedDataUrl)
+          .then((res) => res.blob())
+          .then((blob) => {
+            const uploadTask = uploadBytesResumable(storageRef, blob, {
+              contentType: mimeType,
+            });
+
+            uploadTask.on(
+              'state_changed',
+              (snapshot) => {
+                const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                if (onProgress && pct > 60) onProgress(pct, file.name);
+              },
+              () => {
+                clearTimeout(timer);
+                resolve(null);
+              },
+              async () => {
+                try {
+                  clearTimeout(timer);
+                  const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                  resolve(downloadUrl);
+                } catch {
+                  clearTimeout(timer);
+                  resolve(null);
+                }
+              }
+            );
+          })
+          .catch(() => {
+            clearTimeout(timer);
+            resolve(null);
+          });
+      } catch {
+        clearTimeout(timer);
+        resolve(null);
+      }
+    });
+  };
+
+  const cloudUrl = await tryFirebaseStorage();
+  const finalUrl = cloudUrl || optimizedDataUrl;
+
+  if (onProgress) onProgress(100, file.name);
+
+  return {
+    url: finalUrl,
+    storagePath: cloudUrl ? storagePath : undefined,
+  };
+}
+
+/**
  * Rapidly compresses and optimizes an image file for e-commerce display.
  * Produces crisp high-definition image while keeping byte size ultralight (~40-90KB)
  */

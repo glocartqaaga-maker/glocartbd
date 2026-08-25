@@ -98,12 +98,14 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-2.5 group"
             >
               <img
-                src={glocartLogo}
-                alt="GloCart BD Logo"
+                src={storeSettings.logoUrl || glocartLogo}
+                alt={`${storeSettings.storeName || 'GloCart BD'} Logo`}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  if (!target.src.endsWith('/logo.png')) {
+                  if (target.src !== glocartLogo) {
+                    target.src = glocartLogo;
+                  } else if (!target.src.endsWith('/logo.png')) {
                     target.src = '/logo.png';
                   }
                 }}
@@ -111,7 +113,11 @@ export const Header: React.FC<HeaderProps> = ({
               />
               <div className="flex flex-col">
                 <span className="font-bold text-lg sm:text-xl text-stone-900 tracking-tight leading-none">
-                  GloCart<span className="text-amber-600 ml-0.5">BD</span>
+                  {storeSettings.storeName ? (
+                    storeSettings.storeName
+                  ) : (
+                    <>GloCart<span className="text-amber-600 ml-0.5">BD</span></>
+                  )}
                 </span>
                 <span className="text-[10px] text-stone-500 font-medium tracking-wider uppercase">
                   Online Store

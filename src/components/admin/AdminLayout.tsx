@@ -15,6 +15,7 @@ import {
   Truck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useCart } from '../../context/CartContext';
 import glocartLogo from '../../assets/images/glocart_drive_logo.png';
 
 export type AdminTab = 'dashboard' | 'products' | 'categories' | 'sliders' | 'orders' | 'customers' | 'settings';
@@ -33,6 +34,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   children,
 }) => {
   const { userProfile, logout } = useAuth();
+  const { storeSettings } = useCart();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const navItems: { id: AdminTab; label: string; icon: React.FC<{ className?: string }> }[] = [
@@ -84,19 +86,23 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <img
-                src={glocartLogo}
-                alt="GloCart BD Logo"
+                src={storeSettings.logoUrl || glocartLogo}
+                alt={`${storeSettings.storeName || 'GloCart BD'} Logo`}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  if (!target.src.endsWith('/logo.png')) {
+                  if (target.src !== glocartLogo) {
+                    target.src = glocartLogo;
+                  } else if (!target.src.endsWith('/logo.png')) {
                     target.src = '/logo.png';
                   }
                 }}
                 className="w-9 h-9 rounded-xl object-cover shadow-md shadow-amber-500/20 shrink-0"
               />
               <div>
-                <h1 className="font-extrabold text-white text-base leading-tight">GloCart BD</h1>
+                <h1 className="font-extrabold text-white text-base leading-tight">
+                  {storeSettings.storeName || 'GloCart BD'}
+                </h1>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
                   Control Center
                 </span>

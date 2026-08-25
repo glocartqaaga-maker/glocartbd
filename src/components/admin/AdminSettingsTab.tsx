@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, 
   Save, 
@@ -13,12 +13,22 @@ import {
   AlertCircle, 
   Loader2, 
   Key,
-  ShieldCheck
+  ShieldCheck,
+  Upload,
+  Trash2,
+  Image as ImageIcon,
+  RotateCcw,
+  Eye,
+  Link as LinkIcon,
+  Sparkles,
+  Check
 } from 'lucide-react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useCart } from '../../context/CartContext';
 import { StoreSettings } from '../../types';
+import { uploadLogoImage, deleteStorageImage } from '../../lib/storage';
+import defaultLogoImage from '../../assets/images/glocart_drive_logo.png';
 
 export const AdminSettingsTab: React.FC = () => {
   const { storeSettings, refreshStoreSettings } = useCart();
@@ -27,6 +37,12 @@ export const AdminSettingsTab: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Logo upload state
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoUploadProgress, setLogoUploadProgress] = useState(0);
+  const [isDragOverLogo, setIsDragOverLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Test Steadfast Connection State
   const [isTestingCourier, setIsTestingCourier] = useState(false);
@@ -41,6 +57,109 @@ export const AdminSettingsTab: React.FC = () => {
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handleLogoFileUpload = async (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setErrorMsg('Please select a valid image file (PNG, JPG, SVG, or WEBP).');
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    setLogoUploadProgress(10);
+    setErrorMsg(null);
+
+    try {
+      const uploaded = await uploadLogoImage(file, (progress) => {
+        setLogoUploadProgress(progress);
+      });
+
+      // If old custom logo had a storage path, delete it
+      if (settings.logoStoragePath && settings.logoStoragePath !== uploaded.storagePath) {
+        deleteStorageImage(settings.logoStoragePath);
+      }
+
+      setSettings((prev) => ({
+        ...prev,
+        logoUrl: uploaded.url,
+        logoStoragePath: uploaded.storagePath,
+      }));
+
+      // Instant save to Firestore for immediate live update across all tabs and devices
+      const docRef = doc(db, 'settings', 'store');
+      await setDoc(
+        docRef,
+        {
+          logoUrl: uploaded.url,
+          logoStoragePath: uploaded.storagePath || '',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      await refreshStoreSettings();
+      setFeedback('New store logo uploaded & published live across website!');
+      setTimeout(() => setFeedback(null), 3500);
+    } catch (err: any) {
+      setErrorMsg('Logo upload failed: ' + err.message);
+    } finally {
+      setIsUploadingLogo(false);
+      setLogoUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleLogoFileUpload(e.target.files[0]);
+    }
+  };
+
+  const handleLogoDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOverLogo(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleLogoFileUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!confirm('Are you sure you want to remove the custom logo and reset to default brand logo?')) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      if (settings.logoStoragePath) {
+        deleteStorageImage(settings.logoStoragePath);
+      }
+
+      setSettings((prev) => ({
+        ...prev,
+        logoUrl: '',
+        logoStoragePath: '',
+      }));
+
+      const docRef = doc(db, 'settings', 'store');
+      await setDoc(
+        docRef,
+        {
+          logoUrl: '',
+          logoStoragePath: '',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      await refreshStoreSettings();
+      setFeedback('Logo reset to default brand logo successfully.');
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err: any) {
+      setErrorMsg('Failed to reset logo: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -131,11 +250,186 @@ export const AdminSettingsTab: React.FC = () => {
       )}
 
       <form onSubmit={handleSaveSettings} className="space-y-6">
+        {/* Section 1: Store Logo & Brand Identity */}
+        <div className="p-5 sm:p-6 bg-white rounded-3xl border border-stone-200/80 shadow-xs space-y-5">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h3 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-amber-600" />
+              1. Store Logo & Brand Identity (লোগো ব্যবস্থাপনা)
+            </h3>
+            {settings.logoUrl ? (
+              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-bold flex items-center gap-1">
+                <Check className="w-3 h-3" />
+                কাস্টম লোগো সক্রিয়
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 bg-stone-100 text-stone-600 border border-stone-200 rounded-full text-[11px] font-bold">
+                ডিফল্ট ব্র্যান্ড লোগো
+              </span>
+            )}
+          </div>
+
+          <p className="text-xs text-stone-500">
+            ওয়েবসাইটের টপবার (Header), ফুটার (Footer), অ্যাডমিন প্যানেল এবং ব্রাউজার ট্যাবের লোগো পরিবর্তন বা রিমুভ করুন।
+          </p>
+
+          {/* Dual Live Previews */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Light Preview (Header Simulation) */}
+            <div className="p-3.5 bg-stone-50 rounded-2xl border border-stone-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-600 flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5 text-amber-600" />
+                  লাইট মোড প্রিভিউ (Header / Topbar)
+                </span>
+                <span className="text-[10px] text-stone-400">White Background</span>
+              </div>
+              <div className="p-3 bg-white rounded-xl border border-stone-200/80 flex items-center gap-3 shadow-xs">
+                <img
+                  src={settings.logoUrl || defaultLogoImage}
+                  alt="Logo Light Preview"
+                  className="w-10 h-10 rounded-xl object-cover shadow-sm shrink-0 border border-stone-100"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = defaultLogoImage;
+                  }}
+                />
+                <div>
+                  <div className="font-bold text-sm text-stone-900 leading-tight">
+                    {settings.storeName || 'GloCart BD'}
+                  </div>
+                  <div className="text-[10px] text-stone-400 uppercase tracking-wider">Online Store</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Dark Preview (Footer & Admin Sidebar Simulation) */}
+            <div className="p-3.5 bg-stone-50 rounded-2xl border border-stone-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-600 flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5 text-stone-800" />
+                  ডার্ক মোড প্রিভিউ (Footer & Sidebar)
+                </span>
+                <span className="text-[10px] text-stone-400">Dark Background</span>
+              </div>
+              <div className="p-3 bg-stone-900 rounded-xl border border-stone-800 flex items-center gap-3 shadow-xs text-white">
+                <img
+                  src={settings.logoUrl || defaultLogoImage}
+                  alt="Logo Dark Preview"
+                  className="w-10 h-10 rounded-xl object-cover shadow-sm shrink-0 border border-stone-800"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = defaultLogoImage;
+                  }}
+                />
+                <div>
+                  <div className="font-bold text-sm text-white leading-tight">
+                    {settings.storeName || 'GloCart BD'}
+                  </div>
+                  <div className="text-[10px] text-amber-400 uppercase tracking-wider font-semibold">
+                    Control Center / Footer
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Upload Dropzone & Action Buttons */}
+          <div className="space-y-3">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOverLogo(true);
+              }}
+              onDragLeave={() => setIsDragOverLogo(false)}
+              onDrop={handleLogoDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`p-5 sm:p-6 border-2 border-dashed rounded-2xl text-center cursor-pointer transition-all ${
+                isDragOverLogo
+                  ? 'border-amber-500 bg-amber-50/50 scale-[1.01]'
+                  : 'border-stone-300 hover:border-amber-500 bg-stone-50 hover:bg-amber-50/20'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                onChange={handleFileInputChange}
+                className="hidden"
+              />
+
+              {isUploadingLogo ? (
+                <div className="space-y-2">
+                  <Loader2 className="w-8 h-8 text-amber-500 animate-spin mx-auto" />
+                  <p className="text-xs font-bold text-stone-800">লোগো আপলোড ও প্রসেসিং হচ্ছে...</p>
+                  <div className="w-48 h-2 bg-stone-200 rounded-full mx-auto overflow-hidden">
+                    <div
+                      className="h-full bg-amber-500 transition-all duration-200"
+                      style={{ width: `${logoUploadProgress}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-stone-500 font-mono">{logoUploadProgress}%</span>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="w-10 h-10 bg-amber-100 text-amber-800 rounded-xl flex items-center justify-center mx-auto mb-2 shadow-xs">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <p className="text-xs font-bold text-stone-800">
+                    কম্পিউটার বা মোবাইল থেকে নতুন লোগো ছবি সিলেক্ট করুন
+                  </p>
+                  <p className="text-[11px] text-stone-500">
+                    ক্লিক করুন অথবা ফাইল ড্র্যাগ করে এখানে ড্রপ করুন (PNG, JPG, WEBP, SVG)
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Direct URL input & Remove Button */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-bold text-stone-600 mb-1">
+                  অথবা ছবির ডিরেক্ট লিংক (Image URL) দিন:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={settings.logoUrl || ''}
+                    onChange={(e) => handleChange('logoUrl', e.target.value.trim())}
+                    placeholder="https://example.com/logo.png"
+                    className="w-full px-3 py-2 bg-stone-50 border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col justify-end pt-0 sm:pt-4">
+                {settings.logoUrl ? (
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    className="w-full px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>লোগো রিমুভ / ডিফল্ট রিসেট</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>নতুন লোগো আপলোড</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Logistics & Delivery Charges Card */}
         <div className="p-5 sm:p-6 bg-white rounded-3xl border border-stone-200/80 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
             <Truck className="w-4 h-4 text-amber-600" />
-            1. Bangladesh Delivery Charges & Free Shipping Threshold
+            2. Bangladesh Delivery Charges & Free Shipping Threshold
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -190,7 +484,7 @@ export const AdminSettingsTab: React.FC = () => {
         <div className="p-5 sm:p-6 bg-white rounded-3xl border border-stone-200/80 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
             <Tag className="w-4 h-4 text-amber-600" />
-            2. Active Store Coupon & Discounts
+            3. Active Store Coupon & Discounts
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -229,7 +523,7 @@ export const AdminSettingsTab: React.FC = () => {
         <div className="p-5 sm:p-6 bg-white rounded-3xl border border-stone-200/80 shadow-xs space-y-4">
           <h3 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
             <Store className="w-4 h-4 text-amber-600" />
-            3. Store Brand & Contact Information
+            4. Store Brand & Contact Information
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -337,7 +631,7 @@ export const AdminSettingsTab: React.FC = () => {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2">
               <Key className="w-4 h-4 text-amber-600" />
-              4. Steadfast Courier Integration & API Credentials
+              5. Steadfast Courier Integration & API Credentials
             </h3>
 
             <button
