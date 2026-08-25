@@ -57,12 +57,18 @@ export interface SliderBanner {
   title: string;
   subtitle?: string;
   image: string;
+  storagePath?: string;
+  badge?: string;
+  badgeColor?: 'amber' | 'emerald' | 'rose' | 'indigo' | 'purple' | 'blue';
   buttonText?: string;
   buttonTarget?: string;
   buttonLink?: string;
+  categorySlug?: string;
+  overlayStyle?: 'dark' | 'subtle' | 'vibrant' | 'minimal';
   active: boolean;
   sortOrder: number;
   createdAt?: any;
+  updatedAt?: any;
 }
 
 export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
@@ -83,6 +89,7 @@ export interface CourierInfo {
   status?: string;
   syncedAt?: any;
   notes?: string;
+  autoBooked?: boolean;
 }
 
 export interface Order {
@@ -146,4 +153,5 @@ export interface StoreSettings {
   lowStockThreshold: number;
   steadfastApiKey?: string;
   steadfastSecretKey?: string;
+  autoBookSteadfast?: boolean;
 }

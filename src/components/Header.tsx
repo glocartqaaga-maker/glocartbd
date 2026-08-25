@@ -112,12 +112,22 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform shrink-0"
               />
               <div className="flex flex-col">
-                <span className="font-bold text-lg sm:text-xl text-stone-900 tracking-tight leading-none">
-                  {storeSettings.storeName ? (
-                    storeSettings.storeName
-                  ) : (
-                    <>GloCart<span className="text-amber-600 ml-0.5">BD</span></>
-                  )}
+                <span className="font-bold text-lg sm:text-xl text-stone-900 tracking-tight leading-none flex items-center">
+                  {(() => {
+                    const rawName = storeSettings.storeName || 'GloCart BD';
+                    const match = rawName.match(/^(.*?)(\s*bd)$/i);
+                    if (match) {
+                      return (
+                        <>
+                          <span>{match[1]}</span>
+                          <span className="text-orange-500 font-black ml-1">
+                            {match[2].trim().toUpperCase()}
+                          </span>
+                        </>
+                      );
+                    }
+                    return rawName;
+                  })()}
                 </span>
                 <span className="text-[10px] text-stone-500 font-medium tracking-wider uppercase">
                   Online Store

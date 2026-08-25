@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { Category, Product, SliderBanner, StoreSettings } from '../types';
 
@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   lowStockThreshold: 5,
   steadfastApiKey: 'emud5zhwfadjuyljkwxvqan2czrqn8si',
   steadfastSecretKey: 'igkruxuikw9ykrbkftr9qgme',
+  autoBookSteadfast: true,
 };
 
 export const DEFAULT_CATEGORIES: Category[] = [
@@ -311,11 +312,16 @@ export async function initializeDatabaseIfNeeded() {
       await batch.commit();
     }
 
-    // Set default store settings
-    await setDoc(settingsDocRef, {
-      ...DEFAULT_SETTINGS,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+    // Set default store settings only if the settings document does NOT already exist
+    const settingsSnap = await getDoc(settingsDocRef);
+    if (!settingsSnap.exists()) {
+      console.log('Seeding initial default store settings...');
+      await setDoc(settingsDocRef, {
+        ...DEFAULT_SETTINGS,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
 
     console.log('Database initialization check completed successfully.');
   } catch (error) {

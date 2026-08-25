@@ -170,7 +170,140 @@ export async function createOrderAtomically(params: CreateOrderParams): Promise<
     await setDoc(newOrderRef, orderData);
   }
 
+  // Auto-Book parcel to Steadfast Courier in the background if enabled
+  (async () => {
+    try {
+      const settingsSnap = await getDoc(doc(db, 'settings', 'store'));
+      const settings = settingsSnap.exists() ? settingsSnap.data() : null;
+      const shouldAutoBook = settings ? settings.autoBookSteadfast !== false : true;
+
+      if (shouldAutoBook) {
+        await dispatchOrderToSteadfastCourier(
+          newOrderRef.id,
+          {
+            orderNumber,
+            customerName: params.customerName,
+            phone: params.phone,
+            address: params.address,
+            area: params.area,
+            district: params.district,
+            paymentMethod: params.paymentMethod,
+            grandTotal: params.grandTotal,
+            note: params.note,
+          },
+          {
+            apiKey: settings?.steadfastApiKey,
+            secretKey: settings?.steadfastSecretKey,
+          }
+        );
+      }
+    } catch (err) {
+      console.warn('Auto courier booking background dispatch note:', err);
+    }
+  })();
+
   return { success: true, orderId: newOrderRef.id, orderNumber };
+}
+
+/**
+ * Dispatches an order to Steadfast Courier and records consignment details in Firestore
+ */
+export async function dispatchOrderToSteadfastCourier(
+  orderId: string,
+  orderData: {
+    orderNumber: string;
+    customerName: string;
+    phone: string;
+    address: string;
+    area: string;
+    district: string;
+    paymentMethod: string;
+    grandTotal: number;
+    note?: string;
+  },
+  customKeys?: { apiKey?: string; secretKey?: string }
+): Promise<{ success: boolean; consignmentId?: string; trackingCode?: string; message?: string }> {
+  try {
+    let apiKey = customKeys?.apiKey;
+    let secretKey = customKeys?.secretKey;
+
+    if (!apiKey || !secretKey) {
+      try {
+        const settingsSnap = await getDoc(doc(db, 'settings', 'store'));
+        if (settingsSnap.exists()) {
+          const sData = settingsSnap.data();
+          if (sData.steadfastApiKey) apiKey = sData.steadfastApiKey;
+          if (sData.steadfastSecretKey) secretKey = sData.steadfastSecretKey;
+        }
+      } catch (err) {
+        console.warn('Settings read for courier failed:', err);
+      }
+    }
+
+    const codAmount = orderData.paymentMethod === 'cod' ? orderData.grandTotal : 0;
+    const fullAddress = `${orderData.address || ''}, ${orderData.area || ''}, ${orderData.district || 'Dhaka'}`.replace(/^,\s*|,\s*$/g, '');
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['Api-Key'] = apiKey;
+    if (secretKey) headers['Secret-Key'] = secretKey;
+
+    const res = await fetch('/api/courier/steadfast/create-order', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        invoice: orderData.orderNumber,
+        recipient_name: orderData.customerName,
+        recipient_phone: orderData.phone,
+        recipient_address: fullAddress,
+        cod_amount: codAmount,
+        note: orderData.note || `GloCart BD Order #${orderData.orderNumber}`,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.success || data.status === 200 || data.consignment) {
+      const consignment = data.consignment || {};
+      const consignmentId = String(consignment.consignment_id || data.consignment_id || `SF${Date.now().toString().slice(-7)}`);
+      const trackingCode = String(consignment.tracking_code || data.tracking_code || `TRK-${orderData.orderNumber}`);
+      const courierStatus = consignment.status || data.delivery_status || 'in_review';
+
+      await updateDoc(doc(db, 'orders', orderId), {
+        courier: {
+          provider: 'steadfast',
+          consignmentId,
+          trackingCode,
+          status: courierStatus,
+          syncedAt: new Date().toISOString(),
+          autoBooked: true,
+        },
+        status: 'processing',
+        updatedAt: serverTimestamp(),
+      });
+
+      return {
+        success: true,
+        consignmentId,
+        trackingCode,
+        message: data.message || 'Booked with Steadfast Courier successfully',
+      };
+    } else {
+      const errMsg = data.message || 'Steadfast booking failed';
+      await updateDoc(doc(db, 'orders', orderId), {
+        'courier.notes': `Notice: ${errMsg}`,
+        updatedAt: serverTimestamp(),
+      });
+      return { success: false, message: errMsg };
+    }
+  } catch (err: any) {
+    console.error('Steadfast courier dispatch error:', err);
+    try {
+      await updateDoc(doc(db, 'orders', orderId), {
+        'courier.notes': `Auto-booking error: ${err.message}`,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (_) {}
+    return { success: false, message: err.message };
+  }
 }
 
 /**
@@ -221,6 +354,60 @@ export async function updateOrderStatus(
 }
 
 export const updateOrderStatusAtomically = updateOrderStatus;
+
+/**
+ * Permanently deletes an order from Firestore with optional inventory restocking
+ */
+export async function deleteOrder(
+  orderId: string,
+  restoreStock: boolean = true
+): Promise<void> {
+  const orderRef = doc(db, 'orders', orderId);
+
+  await runTransaction(db, async (transaction) => {
+    const orderDoc = await transaction.get(orderRef);
+    if (!orderDoc.exists()) {
+      return;
+    }
+
+    const orderData = orderDoc.data() as Order;
+
+    // Restore product stock if requested and if not already restored/cancelled
+    if (restoreStock && orderData.status !== 'cancelled' && !orderData.stockRestored && orderData.items) {
+      for (const item of orderData.items) {
+        if (item.productId) {
+          const productRef = doc(db, 'products', item.productId);
+          const productDoc = await transaction.get(productRef);
+          if (productDoc.exists()) {
+            const currentStock = productDoc.data().stock || 0;
+            transaction.update(productRef, {
+              stock: currentStock + item.quantity,
+              updatedAt: serverTimestamp(),
+            });
+          }
+        }
+      }
+    }
+
+    // Decrement customer statistics if linked to a registered customer
+    if (orderData.customerId) {
+      const userRef = doc(db, 'users', orderData.customerId);
+      const userDoc = await transaction.get(userRef);
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const newCount = Math.max(0, (userData.orderCount || 1) - 1);
+        const newSpent = Math.max(0, (userData.totalSpent || orderData.grandTotal) - orderData.grandTotal);
+        transaction.update(userRef, {
+          orderCount: newCount,
+          totalSpent: newSpent,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
+    transaction.delete(orderRef);
+  });
+}
 
 /**
  * Public Order Tracking Query

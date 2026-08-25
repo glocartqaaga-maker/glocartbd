@@ -7,7 +7,9 @@ import {
   Clock, 
   CheckCircle2, 
   AlertCircle, 
+  AlertTriangle,
   Eye, 
+  Trash2,
   Loader2, 
   DollarSign, 
   Send, 
@@ -18,9 +20,9 @@ import {
   User as UserIcon,
   X
 } from 'lucide-react';
-import { collection, getDocs, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { updateOrderStatusAtomically } from '../../lib/orders';
+import { updateOrderStatusAtomically, deleteOrder, dispatchOrderToSteadfastCourier } from '../../lib/orders';
 import { useCart } from '../../context/CartContext';
 import { Order, OrderStatus } from '../../types';
 
@@ -34,11 +36,39 @@ export const AdminOrdersTab: React.FC = () => {
   // Selected Order for Details Modal
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
+  // Order Deletion Modal State
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+  const [restoreStockOnDelete, setRestoreStockOnDelete] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Steadfast actions
   const [isSendingCourier, setIsSendingCourier] = useState<string | null>(null);
   const [courierBalance, setCourierBalance] = useState<number | null>(null);
   const [isCheckingBalance, setIsCheckingBalance] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  // Real-time live Firestore listener for orders
+  useEffect(() => {
+    setLoading(true);
+    const unsub = onSnapshot(
+      collection(db, 'orders'),
+      (snap) => {
+        const list: Order[] = [];
+        snap.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...docSnap.data() } as Order);
+        });
+        list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        setOrders(list);
+        setLoading(false);
+      },
+      (err) => {
+        console.warn('Error listening to orders:', err);
+        setLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, []);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -56,10 +86,6 @@ export const AdminOrdersTab: React.FC = () => {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchOrders();
-  }, []);
 
   // Change Order Status
   const handleStatusChange = async (order: Order, newStatus: OrderStatus) => {
@@ -80,6 +106,25 @@ export const AdminOrdersTab: React.FC = () => {
     }
   };
 
+  // Delete Order Handler
+  const handleConfirmDelete = async () => {
+    if (!orderToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteOrder(orderToDelete.id, restoreStockOnDelete);
+      if (selectedOrder?.id === orderToDelete.id) {
+        setSelectedOrder(null);
+      }
+      setFeedback(`Order #${orderToDelete.orderNumber} was permanently deleted.`);
+      setOrderToDelete(null);
+      setTimeout(() => setFeedback(null), 3500);
+    } catch (err: any) {
+      alert('Failed to delete order: ' + err.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Dispatch to Steadfast Courier
   const handleSendToSteadfast = async (order: Order) => {
     if (order.courier?.consignmentId) {
@@ -89,66 +134,31 @@ export const AdminOrdersTab: React.FC = () => {
 
     setIsSendingCourier(order.id);
     try {
-      const codAmount = order.paymentMethod === 'cod' ? order.grandTotal : 0;
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (storeSettings?.steadfastApiKey) headers['Api-Key'] = storeSettings.steadfastApiKey;
-      if (storeSettings?.steadfastSecretKey) headers['Secret-Key'] = storeSettings.steadfastSecretKey;
-
-      const res = await fetch('/api/courier/steadfast/create-order', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          invoice: order.orderNumber,
-          recipient_name: order.customerName,
-          recipient_phone: order.phone,
-          recipient_address: `${order.address}, ${order.area}, ${order.district}`,
-          cod_amount: codAmount,
-          note: order.note || `GloCart BD Order #${order.orderNumber}`,
-        }),
-      });
-
-      const data = await res.json();
-      if (!data.success && data.status !== 200) {
-        throw new Error(data.message || 'Steadfast dispatch failed.');
-      }
-
-      const consignment = data.consignment || {};
-      const consignmentId = String(consignment.consignment_id || data.consignment_id || `SF${Date.now().toString().slice(-7)}`);
-      const trackingCode = String(consignment.tracking_code || data.tracking_code || `TRK-${order.orderNumber}`);
-
-      const courierPayload = {
-        provider: 'steadfast' as const,
-        consignmentId,
-        trackingCode,
-        status: consignment.status || data.delivery_status || 'in_review',
-        syncedAt: new Date().toISOString(),
-      };
-
-      // Save to Firestore
-      const orderRef = doc(db, 'orders', order.id);
-      await updateDoc(orderRef, {
-        courier: courierPayload,
-        status: 'shipped',
-        updatedAt: serverTimestamp(),
-      });
-
-      // Update local state
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.id === order.id
-            ? { ...o, courier: courierPayload as any, status: 'shipped' }
-            : o
-        )
+      const result = await dispatchOrderToSteadfastCourier(
+        order.id,
+        {
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          phone: order.phone,
+          address: order.address,
+          area: order.area,
+          district: order.district,
+          paymentMethod: order.paymentMethod,
+          grandTotal: order.grandTotal,
+          note: order.note,
+        },
+        {
+          apiKey: storeSettings?.steadfastApiKey,
+          secretKey: storeSettings?.steadfastSecretKey,
+        }
       );
 
-      if (selectedOrder?.id === order.id) {
-        setSelectedOrder((prev) =>
-          prev ? { ...prev, courier: courierPayload as any, status: 'shipped' } : null
-        );
+      if (!result.success) {
+        throw new Error(result.message || 'Steadfast dispatch failed.');
       }
 
       setFeedback(
-        `Successfully sent to Steadfast Courier! Consignment ID: ${consignmentId}`
+        `Successfully sent to Steadfast Courier! Consignment ID: ${result.consignmentId}`
       );
       setTimeout(() => setFeedback(null), 5000);
     } catch (err: any) {
@@ -375,42 +385,65 @@ export const AdminOrdersTab: React.FC = () => {
                     {/* Steadfast Courier Action */}
                     <td className="py-3 px-4">
                       {order.courier?.consignmentId ? (
-                        <div className="space-y-0.5">
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md">
-                            <Truck className="w-3 h-3" /> Steadfast #{order.courier.consignmentId}
-                          </span>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-800 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md">
+                              <Truck className="w-3 h-3 text-sky-600" /> #{order.courier.consignmentId}
+                            </span>
+                            {order.courier.autoBooked && (
+                              <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                Auto
+                              </span>
+                            )}
+                          </div>
                           <button
                             onClick={() => handleCheckCourierStatus(order)}
-                            className="block text-[10px] text-sky-600 hover:underline"
+                            className="block text-[10px] font-semibold text-sky-600 hover:text-sky-800 hover:underline"
                           >
-                            Check Status
+                            Track Status →
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => handleSendToSteadfast(order)}
-                          disabled={isSendingCourier === order.id || order.status === 'cancelled'}
-                          className="px-3 py-1 bg-stone-900 hover:bg-black text-amber-400 font-bold rounded-lg text-[11px] flex items-center gap-1 transition-all disabled:opacity-40"
-                        >
-                          {isSendingCourier === order.id ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-white" />
-                          ) : (
-                            <Send className="w-3 h-3" />
+                        <div className="space-y-1">
+                          <button
+                            onClick={() => handleSendToSteadfast(order)}
+                            disabled={isSendingCourier === order.id || order.status === 'cancelled'}
+                            className="px-2.5 py-1 bg-stone-900 hover:bg-black text-amber-400 font-bold rounded-lg text-[11px] flex items-center gap-1 transition-all disabled:opacity-40 shadow-xs"
+                          >
+                            {isSendingCourier === order.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin text-white" />
+                            ) : (
+                              <Send className="w-3 h-3" />
+                            )}
+                            <span>Send Steadfast</span>
+                          </button>
+                          {order.courier?.notes && (
+                            <p className="text-[9px] text-amber-700 max-w-[140px] truncate" title={order.courier.notes}>
+                              {order.courier.notes}
+                            </p>
                           )}
-                          <span>Send Steadfast</span>
-                        </button>
+                        </div>
                       )}
                     </td>
 
-                    {/* View Details Modal Button */}
+                    {/* Actions: View Details & Delete */}
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => setSelectedOrder(order)}
-                        className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-200 rounded-lg transition-colors"
-                        title="View Full Order Invoice"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setSelectedOrder(order)}
+                          className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-200 rounded-lg transition-colors"
+                          title="View Full Order Invoice"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setOrderToDelete(order)}
+                          className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="Delete Order"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -439,12 +472,22 @@ export const AdminOrdersTab: React.FC = () => {
                   {selectedOrder.orderNumber}
                 </h3>
               </div>
-              <button
-                onClick={() => setSelectedOrder(null)}
-                className="p-1.5 rounded-full hover:bg-stone-100 text-stone-400 hover:text-stone-900"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setOrderToDelete(selectedOrder)}
+                  className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-1 transition-colors"
+                  title="Delete this order"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Order</span>
+                </button>
+                <button
+                  onClick={() => setSelectedOrder(null)}
+                  className="p-1.5 rounded-full hover:bg-stone-100 text-stone-400 hover:text-stone-900"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Customer & Address Details */}
@@ -473,17 +516,50 @@ export const AdminOrdersTab: React.FC = () => {
             </div>
 
             {/* Courier status banner */}
-            {selectedOrder.courier?.consignmentId && (
-              <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl text-xs text-sky-900 flex items-center justify-between">
+            {selectedOrder.courier?.consignmentId ? (
+              <div className="p-3 bg-sky-50 border border-sky-200 rounded-2xl text-xs text-sky-900 flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-sky-600" />
-                  <span>
-                    Steadfast Consignment: <b>{selectedOrder.courier.consignmentId}</b>
-                  </span>
+                  <Truck className="w-4 h-4 text-sky-600 shrink-0" />
+                  <div>
+                    <span className="font-bold">Steadfast Consignment: </span>
+                    <span className="font-mono font-extrabold">{selectedOrder.courier.consignmentId}</span>
+                    {selectedOrder.courier.autoBooked && (
+                      <span className="ml-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                        Auto-Booked
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <span className="font-mono text-[11px] bg-sky-200 px-2 py-0.5 rounded-md">
-                  {selectedOrder.courier.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[11px] bg-sky-200/80 px-2 py-0.5 rounded-md font-bold uppercase">
+                    {selectedOrder.courier.status || 'in_review'}
+                  </span>
+                  <button
+                    onClick={() => handleCheckCourierStatus(selectedOrder)}
+                    className="text-[11px] text-sky-700 underline font-bold"
+                  >
+                    Track
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 text-stone-700">
+                  <Truck className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Parcel not dispatched to Steadfast yet.</span>
+                </div>
+                <button
+                  onClick={() => handleSendToSteadfast(selectedOrder)}
+                  disabled={isSendingCourier === selectedOrder.id || selectedOrder.status === 'cancelled'}
+                  className="px-3 py-1.5 bg-stone-900 hover:bg-black text-amber-400 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all disabled:opacity-50"
+                >
+                  {isSendingCourier === selectedOrder.id ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  <span>Book with Steadfast Courier Now</span>
+                </button>
               </div>
             )}
 
@@ -540,6 +616,82 @@ export const AdminOrdersTab: React.FC = () => {
                 <span>Total Amount ({selectedOrder.paymentMethod.toUpperCase()}):</span>
                 <span>৳{selectedOrder.grandTotal.toLocaleString('en-BD')}</span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE ORDER CONFIRMATION MODAL */}
+      {orderToDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => !isDeleting && setOrderToDelete(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-stone-200 animate-in zoom-in-95 duration-250 p-6 space-y-5"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-extrabold text-stone-900">
+                  Delete Order #{orderToDelete.orderNumber}?
+                </h3>
+                <p className="text-xs text-stone-500 mt-1">
+                  Are you sure you want to permanently delete this order for{' '}
+                  <span className="font-bold text-stone-800">{orderToDelete.customerName}</span> (৳
+                  {orderToDelete.grandTotal.toLocaleString('en-BD')})? This will immediately update your dashboard sales and statistics.
+                </p>
+              </div>
+            </div>
+
+            {/* Restock options */}
+            {orderToDelete.status !== 'cancelled' && orderToDelete.items && orderToDelete.items.length > 0 && (
+              <div className="p-3 bg-stone-50 rounded-2xl border border-stone-200 text-xs">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={restoreStockOnDelete}
+                    onChange={(e) => setRestoreStockOnDelete(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-stone-300"
+                  />
+                  <span className="text-stone-700 font-semibold">
+                    Restore purchased items back to inventory stock ({orderToDelete.items.length} item(s))
+                  </span>
+                </label>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setOrderToDelete(null)}
+                className="px-4 py-2 text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm shadow-rose-600/20 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

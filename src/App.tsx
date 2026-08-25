@@ -183,7 +183,13 @@ function StorefrontApp() {
       {/* Main Storefront Body */}
       <main className="flex-1">
         {/* Promotional Hero Slider */}
-        <HeroSlider onShopNowClick={scrollToProducts} />
+        <HeroSlider
+          onShopNowClick={scrollToProducts}
+          onSelectCategory={(catId) => {
+            setSelectedCategory(catId);
+            scrollToProducts();
+          }}
+        />
 
         {/* Categories Bar */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">

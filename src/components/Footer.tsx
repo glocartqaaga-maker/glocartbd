@@ -81,12 +81,22 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory
                 }}
                 className="w-8 h-8 rounded-lg object-cover shadow-sm shrink-0"
               />
-              <span className="font-bold text-lg text-white tracking-tight">
-                {storeSettings.storeName ? (
-                  storeSettings.storeName
-                ) : (
-                  <>GloCart<span className="text-amber-500">BD</span></>
-                )}
+              <span className="font-bold text-lg text-white tracking-tight flex items-center">
+                {(() => {
+                  const rawName = storeSettings.storeName || 'GloCart BD';
+                  const match = rawName.match(/^(.*?)(\s*bd)$/i);
+                  if (match) {
+                    return (
+                      <>
+                        <span>{match[1]}</span>
+                        <span className="text-orange-500 font-black ml-1">
+                          {match[2].trim().toUpperCase()}
+                        </span>
+                      </>
+                    );
+                  }
+                  return rawName;
+                })()}
               </span>
             </div>
             <p className="text-xs text-stone-400 leading-relaxed">

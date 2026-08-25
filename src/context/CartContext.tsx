@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { CartItem, Product, StoreSettings } from '../types';
@@ -43,47 +43,47 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
 
-  const fetchSettings = async () => {
+  // Real-time live listener for store settings from Firestore
+  useEffect(() => {
+    const settingsDocRef = doc(db, 'settings', 'store');
+    const unsub = onSnapshot(
+      settingsDocRef,
+      (snap) => {
+        if (snap.exists()) {
+          const cloudData = snap.data() as Partial<StoreSettings>;
+          const merged: StoreSettings = {
+            ...DEFAULT_SETTINGS,
+            ...cloudData,
+          };
+          setStoreSettings(merged);
+        }
+      },
+      (err) => {
+        console.warn('Real-time settings listener warning:', err);
+      }
+    );
+
+    return () => unsub();
+  }, []);
+
+  const refreshStoreSettings = useCallback(async () => {
     try {
       const snap = await getDoc(doc(db, 'settings', 'store'));
       if (snap.exists()) {
         const cloudData = snap.data() as Partial<StoreSettings>;
-        // If Firestore contains old placeholder data, upgrade to new contact details
-        const merged: StoreSettings = { ...DEFAULT_SETTINGS, ...cloudData };
-        if (!merged.instagram) {
-          merged.instagram = DEFAULT_SETTINGS.instagram;
-        }
-        if (
-          merged.phone === '+880 1711-223344' ||
-          merged.email === 'support@glocartbd.com' ||
-          merged.address?.includes('Banani')
-        ) {
-          merged.phone = DEFAULT_SETTINGS.phone;
-          merged.email = DEFAULT_SETTINGS.email;
-          merged.address = DEFAULT_SETTINGS.address;
-          try {
-            await setDoc(doc(db, 'settings', 'store'), merged, { merge: true });
-          } catch (e) {
-            console.warn('Note updating legacy store settings in Firestore:', e);
-          }
-        }
-        setStoreSettings(merged);
-      } else {
-        try {
-          await setDoc(doc(db, 'settings', 'store'), DEFAULT_SETTINGS, { merge: true });
-        } catch (e) {
-          console.warn('Note writing initial store settings in Firestore:', e);
-        }
+        setStoreSettings({
+          ...DEFAULT_SETTINGS,
+          ...cloudData,
+        });
       }
     } catch (err) {
-      console.warn('Could not fetch store settings, using defaults:', err);
+      console.warn('Manual refresh settings error:', err);
     }
-  };
-
-  // Fetch live store settings from Firestore
-  useEffect(() => {
-    fetchSettings();
   }, []);
+
+  const updateStoreSettingsState = (newSettings: StoreSettings) => {
+    setStoreSettings(newSettings);
+  };
 
   // Update browser tab favicon & title dynamically when store settings change
   useEffect(() => {
@@ -273,10 +273,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       : (storeSettings.deliveryChargeOutside ?? 120);
   };
 
-  const updateStoreSettingsState = (settings: StoreSettings) => {
-    setStoreSettings(settings);
-  };
-
   return (
     <CartContext.Provider
       value={{
@@ -294,7 +290,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         calculateDeliveryCharge,
         storeSettings,
         updateStoreSettingsState,
-        refreshStoreSettings: fetchSettings,
+        refreshStoreSettings,
         isCartOpen,
         setIsCartOpen,
       }}

@@ -44,7 +44,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
             Order Placed Successfully!
           </h2>
           <p className="text-xs sm:text-sm text-stone-500">
-            Thank you for shopping with GloCart BD. We are preparing your package for dispatch.
+            Thank you for shopping with GloCart <span className="text-orange-500 font-bold">BD</span>. We are preparing your package for dispatch.
           </p>
         </div>
 

@@ -326,6 +326,84 @@ export async function uploadMultipleProductImages(
 }
 
 /**
+ * Uploads a hero banner slider image with high-definition compression up to 1600px width.
+ */
+export async function uploadSliderBannerImage(
+  file: File,
+  onProgress?: UploadProgressCallback
+): Promise<{ url: string; storagePath?: string }> {
+  if (file.size > 15 * 1024 * 1024) {
+    throw new Error(`Banner "${file.name}" exceeds maximum allowed size of 15 MB.`);
+  }
+
+  if (onProgress) onProgress(20, file.name);
+
+  // Compress banner to max 1600px width, 0.88 quality
+  const optimizedDataUrl = await compressImageToDataUrl(file, 1600, 0.88);
+  if (onProgress) onProgress(60, file.name);
+
+  const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const timestamp = Date.now();
+  const storagePath = `sliders/banner_${timestamp}_${cleanFileName}`;
+
+  const tryFirebaseStorage = async (): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 2500);
+
+      try {
+        const storageRef = ref(storage, storagePath);
+        fetch(optimizedDataUrl)
+          .then((res) => res.blob())
+          .then((blob) => {
+            const uploadTask = uploadBytesResumable(storageRef, blob, {
+              contentType: 'image/jpeg',
+            });
+
+            uploadTask.on(
+              'state_changed',
+              (snapshot) => {
+                const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                if (onProgress && pct > 60) onProgress(pct, file.name);
+              },
+              () => {
+                clearTimeout(timer);
+                resolve(null);
+              },
+              async () => {
+                try {
+                  clearTimeout(timer);
+                  const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                  resolve(downloadUrl);
+                } catch {
+                  clearTimeout(timer);
+                  resolve(null);
+                }
+              }
+            );
+          })
+          .catch(() => {
+            clearTimeout(timer);
+            resolve(null);
+          });
+      } catch {
+        clearTimeout(timer);
+        resolve(null);
+      }
+    });
+  };
+
+  const cloudUrl = await tryFirebaseStorage();
+  const finalUrl = cloudUrl || optimizedDataUrl;
+
+  if (onProgress) onProgress(100, file.name);
+
+  return {
+    url: finalUrl,
+    storagePath: cloudUrl ? storagePath : undefined,
+  };
+}
+
+/**
  * Deletes an image from storage if path exists
  */
 export async function deleteStorageImage(storagePath?: string): Promise<void> {

@@ -63,12 +63,16 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           >
             {isMobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
-          <span className="font-bold text-base">GloCart BD Admin</span>
+          <span className="font-bold text-base flex items-center gap-1">
+            <span>GloCart</span>
+            <span className="text-orange-500 font-extrabold">BD</span>
+            <span className="text-stone-400 text-xs ml-1 font-normal">Admin</span>
+          </span>
         </div>
 
         <button
           onClick={onExitAdmin}
-          className="px-2.5 py-1 text-xs font-bold bg-amber-500 text-stone-950 rounded-lg flex items-center gap-1"
+          className="px-2.5 py-1 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-lg flex items-center gap-1 transition-colors"
         >
           <Store className="w-3.5 h-3.5" />
           <span>Storefront</span>
@@ -100,10 +104,24 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 className="w-9 h-9 rounded-xl object-cover shadow-md shadow-amber-500/20 shrink-0"
               />
               <div>
-                <h1 className="font-extrabold text-white text-base leading-tight">
-                  {storeSettings.storeName || 'GloCart BD'}
+                <h1 className="font-extrabold text-white text-base leading-tight flex items-center">
+                  {(() => {
+                    const rawName = storeSettings.storeName || 'GloCart BD';
+                    const match = rawName.match(/^(.*?)(\s*bd)$/i);
+                    if (match) {
+                      return (
+                        <>
+                          <span>{match[1]}</span>
+                          <span className="text-orange-500 font-black ml-1">
+                            {match[2].trim().toUpperCase()}
+                          </span>
+                        </>
+                      );
+                    }
+                    return rawName;
+                  })()}
                 </h1>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400">
                   Control Center
                 </span>
               </div>

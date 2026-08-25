@@ -677,6 +677,38 @@ export const AdminSettingsTab: React.FC = () => {
             </div>
           </div>
 
+          {/* Auto-Booking Toggle */}
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <Truck className="w-4 h-4 text-amber-600" />
+                <span className="text-xs font-bold text-stone-900">
+                  Automatic Steadfast Courier Booking (নতুন অর্ডারে অটো বুকিং)
+                </span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
+                  settings.autoBookSteadfast !== false
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-stone-200 text-stone-700'
+                }`}>
+                  {settings.autoBookSteadfast !== false ? 'ENABLED (সক্রিয়)' : 'DISABLED (বন্ধ)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-600">
+                গ্রাহক ওয়েবসাইটে নতুন অর্ডার প্লেস করার সাথে সাথেই স্বয়ংক্রিয়ভাবে Steadfast-এ পার্সেল বুক হবে ও ট্র্যাকিং কোড জেনারেট হবে।
+              </p>
+            </div>
+
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={settings.autoBookSteadfast !== false}
+                onChange={(e) => handleChange('autoBookSteadfast', e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+            </label>
+          </div>
+
           {courierStatusMsg && (
             <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
               courierStatusMsg.includes('success') || courierStatusMsg.includes('connected') || courierStatusMsg.includes('Balance')

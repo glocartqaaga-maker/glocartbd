@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { AdminLayout, AdminTab } from './AdminLayout';
 import { AdminDashboardTab } from './AdminDashboardTab';
@@ -19,22 +19,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onExitAdmin }) => {
   const [currentTab, setCurrentTab] = useState<AdminTab>('dashboard');
   const [categories, setCategories] = useState<Category[]>([]);
 
-  const fetchCategories = async () => {
-    try {
-      const snap = await getDocs(collection(db, 'categories'));
-      const list: Category[] = [];
-      snap.forEach((d) => {
-        list.push({ id: d.id, ...d.data() } as Category);
-      });
-      list.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-      setCategories(list);
-    } catch (err) {
-      console.warn('Error fetching categories in admin:', err);
-    }
-  };
-
   useEffect(() => {
-    fetchCategories();
+    const unsub = onSnapshot(
+      collection(db, 'categories'),
+      (snap) => {
+        const list: Category[] = [];
+        snap.forEach((d) => {
+          list.push({ id: d.id, ...d.data() } as Category);
+        });
+        list.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+        setCategories(list);
+      },
+      (err) => {
+        console.warn('Error listening to categories in admin:', err);
+      }
+    );
+
+    return () => unsub();
   }, []);
 
   return (
@@ -52,7 +53,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onExitAdmin }) => {
       {currentTab === 'categories' && (
         <AdminCategoriesTab
           categories={categories}
-          onRefreshCategories={fetchCategories}
+          onRefreshCategories={() => {}}
         />
       )}
       {currentTab === 'sliders' && <AdminSlidersTab />}

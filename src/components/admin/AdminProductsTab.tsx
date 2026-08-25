@@ -20,6 +20,7 @@ import {
 import { 
   collection, 
   getDocs, 
+  onSnapshot,
   doc, 
   setDoc, 
   deleteDoc, 
@@ -79,27 +80,28 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch products
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const snap = await getDocs(collection(db, 'products'));
-      const list: Product[] = [];
-      snap.forEach((docSnap) => {
-        list.push({ id: docSnap.id, ...docSnap.data() } as Product);
-      });
-      // Sort by newest
-      list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-      setProducts(list);
-    } catch (err: any) {
-      console.error('Error loading products:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Real-time products listener
   useEffect(() => {
-    fetchProducts();
+    setLoading(true);
+    const unsub = onSnapshot(
+      collection(db, 'products'),
+      (snap) => {
+        const list: Product[] = [];
+        snap.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...docSnap.data() } as Product);
+        });
+        // Sort by newest
+        list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+        setProducts(list);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Error listening to products:', err);
+        setLoading(false);
+      }
+    );
+
+    return () => unsub();
   }, []);
 
   const resetForm = () => {
@@ -385,7 +387,6 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
 
       setIsModalOpen(false);
       resetForm();
-      await fetchProducts();
       setTimeout(() => setFeedbackSuccess(null), 3000);
     } catch (err: any) {
       setFormError('Failed to save product: ' + err.message);

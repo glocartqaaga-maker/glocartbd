@@ -13,7 +13,7 @@ import {
   Loader2,
   Calendar
 } from 'lucide-react';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Order, Product, UserProfile } from '../../types';
 
@@ -28,36 +28,54 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({ onNavigate
   const [customersCount, setCustomersCount] = useState(0);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      setLoading(true);
-      try {
-        // Fetch orders
-        const ordersSnap = await getDocs(collection(db, 'orders'));
+    // Real-time listener for orders
+    const unsubOrders = onSnapshot(
+      collection(db, 'orders'),
+      (snap) => {
         const ordersList: Order[] = [];
-        ordersSnap.forEach((doc) => {
+        snap.forEach((doc) => {
           ordersList.push({ id: doc.id, ...doc.data() } as Order);
         });
         setOrders(ordersList);
+        setLoading(false);
+      },
+      (err) => {
+        console.warn('Dashboard orders listener note:', err);
+        setLoading(false);
+      }
+    );
 
-        // Fetch products
-        const prodSnap = await getDocs(collection(db, 'products'));
+    // Real-time listener for products
+    const unsubProducts = onSnapshot(
+      collection(db, 'products'),
+      (snap) => {
         const prodList: Product[] = [];
-        prodSnap.forEach((doc) => {
+        snap.forEach((doc) => {
           prodList.push({ id: doc.id, ...doc.data() } as Product);
         });
         setProducts(prodList);
-
-        // Fetch users
-        const usersSnap = await getDocs(collection(db, 'users'));
-        setCustomersCount(usersSnap.size);
-      } catch (err) {
-        console.warn('Dashboard fetch note:', err);
-      } finally {
-        setLoading(false);
+      },
+      (err) => {
+        console.warn('Dashboard products listener note:', err);
       }
-    };
+    );
 
-    fetchDashboardData();
+    // Real-time listener for users / customers
+    const unsubUsers = onSnapshot(
+      collection(db, 'users'),
+      (snap) => {
+        setCustomersCount(snap.size);
+      },
+      (err) => {
+        console.warn('Dashboard users listener note:', err);
+      }
+    );
+
+    return () => {
+      unsubOrders();
+      unsubProducts();
+      unsubUsers();
+    };
   }, []);
 
   if (loading) {
