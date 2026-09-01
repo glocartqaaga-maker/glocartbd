@@ -184,7 +184,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory
             <h4 className="text-xs font-bold text-white uppercase tracking-wider">Store Location</h4>
             <div className="flex items-start gap-2 text-xs text-stone-400">
               <MapPin className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-              <p className="leading-relaxed">{storeSettings.address}</p>
+              <p className="leading-relaxed">{storeSettings.address || 'Dhaka, Bangladesh'}</p>
             </div>
 
             <div className="pt-3">
@@ -216,12 +216,12 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTracking, onSelectCategory
             <span>Design & Developed by</span>
             <a
               id="link-footer-developer"
-              href="https://it.qaaga.com/"
+              href="https://team.qaaga.com/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-amber-400 hover:text-amber-300 font-bold underline underline-offset-2 flex items-center gap-1 transition-colors"
             >
-              <span>QAAGA IT</span>
+              <span>QAAGA TEAM</span>
               <ExternalLink className="w-3 h-3 text-amber-400/80" />
             </a>
           </div>

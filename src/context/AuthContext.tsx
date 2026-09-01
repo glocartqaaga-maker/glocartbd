@@ -33,6 +33,7 @@ interface AuthContextType {
     address?: string;
   }) => Promise<void>;
   login: (identifier: string, password: string) => Promise<void>;
+  loginAsAdmin: (identifier: string, password: string) => Promise<boolean>;
   loginAsAdminQuick: () => Promise<void>;
   loginWithPhoneQuick: (params: {
     name: string;
@@ -46,7 +47,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   resendVerification: () => Promise<void>;
   updateCustomerProfile: (data: Partial<UserProfile>) => Promise<void>;
-  updateAdminCredentials: (creds: { username?: string; email?: string; password: string }) => Promise<void>;
+  updateAdminCredentials: (creds: { username?: string; email?: string; password?: string }) => Promise<void>;
   clearError: () => void;
 }
 
@@ -378,7 +379,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Instant Quick Admin Login
+  // Dedicated Strict Admin Login
+  const loginAsAdmin = async (identifier: string, password: string): Promise<boolean> => {
+    setError(null);
+    const rawId = identifier.trim().toLowerCase();
+    const configuredUser = (adminCredentials.username || 'admin').trim().toLowerCase();
+    const configuredEmail = (adminCredentials.email || 'admin@glocartbd.com').trim().toLowerCase();
+    const expectedPassword = adminCredentials.password || 'glo123cart';
+
+    const isUserMatch = rawId === configuredUser;
+    const isEmailMatch = rawId === configuredEmail || rawId === 'admin@glocartbd.com';
+
+    if (!isUserMatch && !isEmailMatch) {
+      const err = 'ভুল অ্যাডমিন ইউজারনেম বা ইমেইল। সঠিক ইউজারনেম দিন।';
+      setError(err);
+      throw new Error(err);
+    }
+
+    if (password !== expectedPassword) {
+      const err = 'ভুল অ্যাডমিন পাসওয়ার্ড। সঠিক পাসওয়ার্ড দিন।';
+      setError(err);
+      throw new Error(err);
+    }
+
+    try {
+      localStorage.setItem('glocart_admin_session', 'true');
+      setIsLocalAdmin(true);
+      const adminProfile: UserProfile = {
+        uid: 'admin_local_master',
+        name: 'GloCart Administrator',
+        email: adminCredentials.email || 'admin@glocartbd.com',
+        phone: '+8801711000000',
+        role: 'admin',
+        status: 'active',
+        orderCount: 0,
+        totalSpent: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      setUserProfile(adminProfile);
+      return true;
+    } catch (e: any) {
+      setError(e.message || 'Failed to authenticate admin.');
+      throw e;
+    }
+  };
+
+  // Instant Quick Admin Login (only used if explicitly requested)
   const loginAsAdminQuick = async () => {
     setError(null);
     try {
@@ -387,7 +434,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const adminProfile: UserProfile = {
         uid: 'admin_local_master',
         name: 'GloCart Administrator',
-        email: 'admin@glocartbd.com',
+        email: adminCredentials.email || 'admin@glocartbd.com',
         phone: '+8801711000000',
         role: 'admin',
         status: 'active',
@@ -409,51 +456,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const rawLower = rawId.toLowerCase();
     
     // Check if it's admin username or admin email
-    const configuredAdminUsername = (adminCredentials.username || 'admin').toLowerCase();
-    const configuredAdminEmail = (adminCredentials.email || 'admin@glocartbd.com').toLowerCase();
+    const configuredAdminUsername = (adminCredentials.username || 'admin').trim().toLowerCase();
+    const configuredAdminEmail = (adminCredentials.email || 'admin@glocartbd.com').trim().toLowerCase();
     const isConfiguredAdminId = 
       rawLower === configuredAdminUsername || 
-      rawLower === 'admin' || 
       rawLower === configuredAdminEmail || 
-      rawLower === 'admin@glocartbd.com' ||
-      rawLower === 'info.glocartbd@gmail.com' ||
-      rawLower === 'glocart.qaaga@gmail.com';
+      rawLower === 'admin@glocartbd.com';
 
     if (isConfiguredAdminId) {
-      const isValidAdminPass = 
-        password === adminCredentials.password || 
-        password === 'glo123cart' || 
-        password === 'admin' || 
-        password === 'admin123';
-
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, adminCredentials.email || 'admin@glocartbd.com', password);
-        localStorage.setItem('glocart_admin_session', 'true');
-        setIsLocalAdmin(true);
-        await fetchUserProfile(userCredential.user);
-        return;
-      } catch (err: any) {
-        if (isValidAdminPass) {
-          localStorage.setItem('glocart_admin_session', 'true');
-          setIsLocalAdmin(true);
-          const adminProfile: UserProfile = {
-            uid: 'admin_local_master',
-            name: 'GloCart Administrator',
-            email: adminCredentials.email || 'admin@glocartbd.com',
-            phone: '+8801711000000',
-            role: 'admin',
-            status: 'active',
-            orderCount: 0,
-            totalSpent: 0,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          setUserProfile(adminProfile);
-          return;
-        }
-        throw new Error('Invalid Admin password or username.');
+      const expectedPassword = adminCredentials.password || 'glo123cart';
+      if (password !== expectedPassword) {
+        const errorMsg = 'ভুল অ্যাডমিন পাসওয়ার্ড। সঠিক পাসওয়ার্ড দিন।';
+        setError(errorMsg);
+        throw new Error(errorMsg);
       }
+
+      // Valid admin password provided
+      localStorage.setItem('glocart_admin_session', 'true');
+      setIsLocalAdmin(true);
+      const adminProfile: UserProfile = {
+        uid: 'admin_local_master',
+        name: 'GloCart Administrator',
+        email: adminCredentials.email || 'admin@glocartbd.com',
+        phone: '+8801711000000',
+        role: 'admin',
+        status: 'active',
+        orderCount: 0,
+        totalSpent: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      setUserProfile(adminProfile);
+      return;
     }
+
+    // Normal customer login path: make sure admin session is not active
+    localStorage.removeItem('glocart_admin_session');
+    setIsLocalAdmin(false);
 
     // Check if identifier is a Bangladesh mobile number (e.g. 017..., +8801...)
     const isPhoneLike = /^[0-9+ ]{10,16}$/.test(rawId) && !rawId.includes('@');
@@ -792,6 +831,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error,
         signup,
         login,
+        loginAsAdmin,
         loginAsAdminQuick,
         loginWithPhoneQuick,
         loginWithGoogle,

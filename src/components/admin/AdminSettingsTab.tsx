@@ -37,7 +37,7 @@ import { uploadLogoImage, deleteStorageImage } from '../../lib/storage';
 import defaultLogoImage from '../../assets/images/glocart_drive_logo.png';
 
 export const AdminSettingsTab: React.FC = () => {
-  const { storeSettings, refreshStoreSettings } = useCart();
+  const { storeSettings, refreshStoreSettings, updateStoreSettingsState } = useCart();
   const { adminCredentials, updateAdminCredentials } = useAuth();
 
   const [settings, setSettings] = useState<StoreSettings>(storeSettings);
@@ -59,7 +59,8 @@ export const AdminSettingsTab: React.FC = () => {
   const [adminUsername, setAdminUsername] = useState(adminCredentials?.username || 'admin');
   const [adminEmail, setAdminEmail] = useState(adminCredentials?.email || 'admin@glocartbd.com');
   const [adminNewPassword, setAdminNewPassword] = useState('');
-  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [isUpdatingAdminAuth, setIsUpdatingAdminAuth] = useState(false);
   const [adminAuthFeedback, setAdminAuthFeedback] = useState<string | null>(null);
   const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
@@ -230,24 +231,38 @@ export const AdminSettingsTab: React.FC = () => {
     setFeedback(null);
 
     try {
+      const updatedPayload: StoreSettings = {
+        ...settings,
+        storeName: settings.storeName?.trim() || 'GloCart BD',
+        phone: settings.phone?.trim() || '',
+        email: settings.email?.trim() || '',
+        address: settings.address?.trim() || '',
+        facebook: settings.facebook?.trim() || '',
+        instagram: settings.instagram?.trim() || '',
+        promoBar: settings.promoBar?.trim() || '',
+        supportHours: settings.supportHours?.trim() || '',
+        footerDescription: settings.footerDescription?.trim() || '',
+        deliveryChargeDhaka: Number(settings.deliveryChargeDhaka) || 0,
+        deliveryChargeOutside: Number(settings.deliveryChargeOutside) || 0,
+        freeShippingThreshold: Number(settings.freeShippingThreshold) || 0,
+        couponDiscountPercent: Number(settings.couponDiscountPercent) || 0,
+        lowStockThreshold: Number(settings.lowStockThreshold) || 0,
+      };
+
       const docRef = doc(db, 'settings', 'store');
       await setDoc(
         docRef,
         {
-          ...settings,
-          deliveryChargeDhaka: Number(settings.deliveryChargeDhaka),
-          deliveryChargeOutside: Number(settings.deliveryChargeOutside),
-          freeShippingThreshold: Number(settings.freeShippingThreshold),
-          couponDiscountPercent: Number(settings.couponDiscountPercent),
-          lowStockThreshold: Number(settings.lowStockThreshold),
+          ...updatedPayload,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
 
+      updateStoreSettingsState(updatedPayload);
       await refreshStoreSettings();
-      setFeedback('Store settings & logistics parameters saved successfully!');
-      setTimeout(() => setFeedback(null), 3000);
+      setFeedback('Store settings & location updated and published live across website!');
+      setTimeout(() => setFeedback(null), 3500);
     } catch (err: any) {
       setErrorMsg('Failed to save settings: ' + err.message);
     } finally {
@@ -645,11 +660,14 @@ export const AdminSettingsTab: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-stone-700 mb-1">Store Address</label>
+            <label className="block text-xs font-bold text-stone-700 mb-1">
+              Store Location & Physical Address (স্টোর ঠিকানা / লোকেশন)
+            </label>
             <input
               type="text"
-              value={settings.address}
+              value={settings.address || ''}
               onChange={(e) => handleChange('address', e.target.value)}
+              placeholder="e.g. Level- 1, House- 17, Road- 4, Gulshan-1, Dhaka, Bangladesh"
               className="w-full px-3 py-2 bg-stone-50 border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
             />
           </div>
@@ -819,12 +837,12 @@ export const AdminSettingsTab: React.FC = () => {
         )}
 
         <form onSubmit={handleUpdateAdminAuth} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Username box */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-stone-500" />
-                <span>Username</span>
+                <span>Username (ইউজারনেম)</span>
               </label>
               <input
                 type="text"
@@ -840,7 +858,7 @@ export const AdminSettingsTab: React.FC = () => {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-stone-500" />
-                <span>Email</span>
+                <span>Email (ইমেইল)</span>
               </label>
               <input
                 type="email"
@@ -852,32 +870,58 @@ export const AdminSettingsTab: React.FC = () => {
               />
             </div>
 
-            {/* Password box */}
+            {/* Current Password box (with view option) */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-stone-500" />
-                <span>Password</span>
+                <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                <span>Current Password (বর্তমান পাসওয়ার্ড)</span>
               </label>
               <div className="relative">
                 <input
-                  type={showAdminPassword ? 'text' : 'password'}
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={adminCredentials?.password || 'glo123cart'}
+                  readOnly
+                  className="w-full px-4 py-2.5 pr-10 rounded-xl bg-stone-100 border border-stone-200 text-xs sm:text-sm text-stone-800 font-mono font-semibold select-all"
+                  title="Your active current admin password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-800 p-1 transition-colors"
+                  title={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                >
+                  {showCurrentPassword ? <EyeOff className="w-4 h-4 text-amber-600" /> : <Eye className="w-4 h-4 text-stone-500" />}
+                </button>
+              </div>
+            </div>
+
+            {/* New Password box */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-stone-500" />
+                <span>New Password (নতুন পাসওয়ার্ড)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
                   value={adminNewPassword}
                   onChange={(e) => setAdminNewPassword(e.target.value)}
-                  placeholder="New Password (optional)"
+                  placeholder="Leave blank to keep current"
                   className="w-full px-4 py-2.5 pr-10 rounded-xl border border-stone-200 text-xs sm:text-sm focus:outline-none focus:border-amber-500 font-medium"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowAdminPassword(!showAdminPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1 transition-colors"
+                  title={showNewPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 flex items-center gap-3">
             <button
               type="submit"
               disabled={isUpdatingAdminAuth}

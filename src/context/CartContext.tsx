@@ -28,6 +28,7 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = 'glocart_bd_cart_v1';
+const SETTINGS_STORAGE_KEY = 'glocart_store_settings_cache';
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
@@ -39,7 +40,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return [];
     }
   });
-  const [storeSettings, setStoreSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
+  const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => {
+    try {
+      const cached = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (cached) {
+        return { ...DEFAULT_SETTINGS, ...JSON.parse(cached) };
+      }
+    } catch {}
+    return DEFAULT_SETTINGS;
+  });
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
 
@@ -56,6 +65,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...cloudData,
           };
           setStoreSettings(merged);
+          try {
+            localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(merged));
+          } catch {}
         }
       },
       (err) => {
@@ -71,10 +83,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const snap = await getDoc(doc(db, 'settings', 'store'));
       if (snap.exists()) {
         const cloudData = snap.data() as Partial<StoreSettings>;
-        setStoreSettings({
+        const merged: StoreSettings = {
           ...DEFAULT_SETTINGS,
           ...cloudData,
-        });
+        };
+        setStoreSettings(merged);
+        try {
+          localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(merged));
+        } catch {}
       }
     } catch (err) {
       console.warn('Manual refresh settings error:', err);
@@ -82,7 +98,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const updateStoreSettingsState = (newSettings: StoreSettings) => {
-    setStoreSettings(newSettings);
+    const merged = { ...storeSettings, ...newSettings };
+    setStoreSettings(merged);
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(merged));
+    } catch {}
   };
 
   // Update browser tab favicon & title dynamically when store settings change
@@ -158,26 +178,29 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addToCart = (product: Product, quantity = 1): boolean => {
-    if (product.stock <= 0) {
+    const availableStock = typeof product.stock === 'number' ? product.stock : 99;
+    if (availableStock <= 0) {
       return false;
     }
 
+    const addQty = Math.max(1, Math.floor(quantity));
     let success = true;
+
     setCartItems((prev) => {
       const existing = prev.find((item) => item.productId === product.id);
       let updated: CartItem[];
 
       if (existing) {
-        const newQty = Math.min(existing.quantity + quantity, product.stock);
-        if (existing.quantity >= product.stock) {
+        const newQty = Math.min(existing.quantity + addQty, availableStock);
+        if (existing.quantity >= availableStock) {
           success = false;
           return prev;
         }
         updated = prev.map((item) =>
-          item.productId === product.id ? { ...item, quantity: newQty } : item
+          item.productId === product.id ? { ...item, quantity: newQty, stock: availableStock } : item
         );
       } else {
-        const initialQty = Math.min(quantity, product.stock);
+        const initialQty = Math.min(addQty, availableStock);
         const newItem: CartItem = {
           productId: product.id,
           name: product.name,
@@ -185,7 +208,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           oldPrice: product.oldPrice,
           quantity: initialQty,
           image: product.primaryImage || (product.images?.[0]?.url ?? ''),
-          stock: product.stock,
+          stock: availableStock,
           categoryName: product.categoryName,
         };
         updated = [...prev, newItem];
@@ -207,7 +230,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
+    const validQty = Math.floor(quantity);
+    if (validQty <= 0) {
       removeFromCart(productId);
       return;
     }
@@ -215,8 +239,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCartItems((prev) => {
       const updated = prev.map((item) => {
         if (item.productId === productId) {
-          const validQty = Math.min(quantity, item.stock);
-          return { ...item, quantity: validQty };
+          const maxStock = typeof item.stock === 'number' && item.stock > 0 ? item.stock : 99;
+          const clampedQty = Math.min(validQty, maxStock);
+          return { ...item, quantity: clampedQty };
         }
         return item;
       });

@@ -39,7 +39,7 @@ import {
 
 function StorefrontApp() {
   const { currentUser, userProfile, isAdmin } = useAuth();
-  const { cartItems, storeSettings, appliedCoupon, discount } = useCart();
+  const { cartItems, storeSettings, appliedCoupon, discount, isCartOpen, setIsCartOpen } = useCart();
 
   // Store data states
   const [products, setProducts] = useState<Product[]>([]);
@@ -53,7 +53,6 @@ function StorefrontApp() {
 
   // Modals state
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authDefaultTab, setAuthDefaultTab] = useState<'login' | 'register' | 'forgot' | 'admin'>('login');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);

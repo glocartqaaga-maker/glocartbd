@@ -18,7 +18,7 @@ interface AdminPortalProps {
 }
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({ onExitAdmin }) => {
-  const { isAdmin, login, error, clearError } = useAuth();
+  const { isAdmin, loginAsAdmin, error, clearError } = useAuth();
   const [currentTab, setCurrentTab] = useState<AdminTab>('dashboard');
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -66,7 +66,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ onExitAdmin }) => {
 
     setIsSubmitting(true);
     try {
-      await login(loginId.trim(), password);
+      await loginAsAdmin(loginId.trim(), password);
     } catch (err: any) {
       setLoginError(err.message || 'Invalid admin credentials.');
     } finally {

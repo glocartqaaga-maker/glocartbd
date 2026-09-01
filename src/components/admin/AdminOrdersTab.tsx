@@ -18,7 +18,9 @@ import {
   MapPin,
   Phone,
   User as UserIcon,
-  X
+  X,
+  Printer,
+  FileText
 } from 'lucide-react';
 import { collection, onSnapshot, getDocs, doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -215,6 +217,153 @@ export const AdminOrdersTab: React.FC = () => {
     } catch (err: any) {
       alert('Courier status check: ' + err.message);
     }
+  };
+
+  // Print / Save Order as PDF Invoice
+  const handlePrintInvoice = (order: Order) => {
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
+    if (!printWindow) {
+      alert('Pop-up blocked. Please allow pop-ups to print or download the invoice PDF.');
+      return;
+    }
+
+    const itemsHtml = order.items
+      ?.map(
+        (it, idx) => `
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px;">${idx + 1}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; font-weight: 600;">${it.name}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; text-align: center;">${it.quantity}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; text-align: right;">৳${it.price.toLocaleString('en-BD')}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; text-align: right; font-weight: bold;">৳${(it.price * it.quantity).toLocaleString('en-BD')}</td>
+      </tr>
+    `
+      )
+      .join('');
+
+    const formattedDate = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('en-BD') : new Date().toLocaleString('en-BD');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice - ${order.orderNumber}</title>
+        <meta charset="utf-8">
+        <style>
+          @page { size: A4; margin: 15mm; }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1c1917; margin: 0; padding: 20px; line-height: 1.5; }
+          .invoice-box { max-width: 800px; margin: auto; padding: 20px; border: 1px solid #e7e5e4; border-radius: 12px; }
+          .header-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+          .header-table td { vertical-align: top; }
+          .store-title { font-size: 22px; font-weight: 900; color: #d97706; text-transform: uppercase; margin: 0; }
+          .store-sub { font-size: 12px; color: #78716c; margin-top: 4px; }
+          .invoice-badge { display: inline-block; background: #fef3c7; color: #92400e; font-weight: bold; font-size: 12px; padding: 4px 10px; border-radius: 6px; }
+          .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; background: #fafaf9; border-radius: 8px; }
+          .meta-table td { padding: 12px 16px; font-size: 12px; vertical-align: top; }
+          .section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #78716c; margin-bottom: 6px; letter-spacing: 0.5px; }
+          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          .items-table th { background: #f5f5f4; color: #44403c; font-size: 12px; font-weight: 800; text-transform: uppercase; padding: 10px; border-bottom: 2px solid #e7e5e4; }
+          .summary-table { width: 300px; margin-left: auto; border-collapse: collapse; font-size: 13px; }
+          .summary-table td { padding: 6px 10px; }
+          .total-row td { font-size: 15px; font-weight: 900; color: #0c0a09; border-top: 2px solid #1c1917; padding-top: 10px; }
+          .footer-note { margin-top: 30px; text-align: center; font-size: 11px; color: #a8a29e; border-top: 1px dashed #d6d3d1; padding-top: 12px; }
+          @media print {
+            body { padding: 0; }
+            .invoice-box { border: none; padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-box">
+          <div class="no-print" style="margin-bottom: 16px; text-align: right;">
+            <button onclick="window.print()" style="background: #d97706; color: white; border: none; padding: 8px 16px; font-weight: bold; border-radius: 6px; cursor: pointer;">Print / Download PDF</button>
+          </div>
+          <table class="header-table">
+            <tr>
+              <td>
+                <h1 class="store-title">${storeSettings?.storeName || 'GloCart BD'}</h1>
+                <p class="store-sub">${storeSettings?.tagline || 'Premium Online Shopping in Bangladesh'}<br>Phone: ${storeSettings?.phone || '+880 1700-000000'} | Email: ${storeSettings?.email || 'support@glocartbd.com'}<br>${storeSettings?.address || 'Dhaka, Bangladesh'}</p>
+              </td>
+              <td style="text-align: right;">
+                <span class="invoice-badge">INVOICE</span>
+                <p style="font-size: 16px; font-weight: 900; margin: 6px 0 2px 0;">#${order.orderNumber}</p>
+                <p style="font-size: 12px; color: #78716c; margin: 0;">Date: ${formattedDate}</p>
+                <p style="font-size: 12px; color: #78716c; margin: 2px 0 0 0; text-transform: uppercase;">Payment: <strong>${order.paymentMethod}</strong> (${order.paymentStatus || 'pending'})</p>
+                ${order.courier?.consignmentId ? `<p style="font-size: 11px; color: #0284c7; margin: 4px 0 0 0;">Steadfast Courier: <strong>#${order.courier.consignmentId}</strong></p>` : ''}
+              </td>
+            </tr>
+          </table>
+
+          <table class="meta-table">
+            <tr>
+              <td style="width: 50%;">
+                <div class="section-title">Customer / Recipient</div>
+                <div style="font-size: 14px; font-weight: bold; color: #1c1917;">${order.customerName}</div>
+                <div>Phone: <strong>${order.phone}</strong></div>
+                ${order.email ? `<div>Email: ${order.email}</div>` : ''}
+              </td>
+              <td style="width: 50%;">
+                <div class="section-title">Shipping Address</div>
+                <div>${order.address}</div>
+                <div>${order.area}, ${order.district}</div>
+                ${order.note ? `<div style="margin-top: 4px; color: #b45309; font-style: italic;">Note: ${order.note}</div>` : ''}
+              </td>
+            </tr>
+          </table>
+
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="text-align: left; width: 40px;">#</th>
+                <th style="text-align: left;">Item Description</th>
+                <th style="text-align: center; width: 60px;">Qty</th>
+                <th style="text-align: right; width: 100px;">Price</th>
+                <th style="text-align: right; width: 110px;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <table class="summary-table">
+            <tr>
+              <td style="color: #78716c;">Subtotal:</td>
+              <td style="text-align: right; font-weight: 600;">৳${order.subtotal.toLocaleString('en-BD')}</td>
+            </tr>
+            ${order.discount > 0 ? `
+            <tr>
+              <td style="color: #059669;">Discount (${order.couponCode || 'Coupon'}):</td>
+              <td style="text-align: right; color: #059669; font-weight: 600;">-৳${order.discount.toLocaleString('en-BD')}</td>
+            </tr>` : ''}
+            <tr>
+              <td style="color: #78716c;">Delivery Charge:</td>
+              <td style="text-align: right; font-weight: 600;">৳${order.deliveryCharge}</td>
+            </tr>
+            <tr class="total-row">
+              <td>Grand Total:</td>
+              <td style="text-align: right;">৳${order.grandTotal.toLocaleString('en-BD')}</td>
+            </tr>
+          </table>
+
+          <div class="footer-note">
+            <p>Thank you for shopping with <strong>${storeSettings?.storeName || 'GloCart BD'}</strong>!</p>
+            <p>Design & Developed by QAAGA TEAM (https://team.qaaga.com/)</p>
+          </div>
+        </div>
+        <script>
+          window.onload = function() {
+            setTimeout(function() { window.print(); }, 400);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const filteredOrders = orders.filter((o) => {
@@ -426,13 +575,20 @@ export const AdminOrdersTab: React.FC = () => {
                       )}
                     </td>
 
-                    {/* Actions: View Details & Delete */}
+                    {/* Actions: View Details, Print Invoice, & Delete */}
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          onClick={() => handlePrintInvoice(order)}
+                          className="p-1.5 text-stone-600 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                          title="Print / Download PDF Invoice"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => setSelectedOrder(order)}
                           className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-200 rounded-lg transition-colors"
-                          title="View Full Order Invoice"
+                          title="View Full Order Details"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -473,6 +629,14 @@ export const AdminOrdersTab: React.FC = () => {
                 </h3>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handlePrintInvoice(selectedOrder)}
+                  className="px-2.5 py-1 text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl flex items-center gap-1 transition-colors"
+                  title="Print or Save Invoice as PDF"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Invoice / PDF</span>
+                </button>
                 <button
                   onClick={() => setOrderToDelete(selectedOrder)}
                   className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-1 transition-colors"

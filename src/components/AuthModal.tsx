@@ -116,24 +116,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       await login(cleanId, password);
       
       const cleanLower = cleanId.toLowerCase();
-      const configuredUser = (adminCredentials?.username || 'admin').toLowerCase();
-      const configuredEmail = (adminCredentials?.email || 'admin@glocartbd.com').toLowerCase();
-      const isTryingAdmin = 
+      const configuredUser = (adminCredentials?.username || 'admin').trim().toLowerCase();
+      const configuredEmail = (adminCredentials?.email || 'admin@glocartbd.com').trim().toLowerCase();
+      const isConfirmedAdmin = 
         cleanLower === configuredUser ||
-        cleanLower === 'admin' || 
         cleanLower === configuredEmail ||
-        cleanLower === 'admin@glocartbd.com' || 
-        cleanLower === 'info.glocartbd@gmail.com' || 
-        cleanLower === 'glocart.qaaga@gmail.com' ||
-        password === adminCredentials?.password ||
-        password === 'glo123cart';
+        cleanLower === 'admin@glocartbd.com';
 
       setSuccessMessage('Signed in successfully!');
       
       setTimeout(() => {
         onSuccess?.();
-        // Auto open admin dashboard if admin signs in
-        if (isTryingAdmin && onOpenAdmin) {
+        // Auto open admin dashboard only if authenticated admin signs in
+        if (isConfirmedAdmin && onOpenAdmin) {
           onOpenAdmin();
         }
         onClose();
