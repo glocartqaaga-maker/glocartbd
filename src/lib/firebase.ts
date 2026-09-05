@@ -1,6 +1,11 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { 
+  getFirestore, 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager 
+} from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfigData from '../../firebase-applet-config.json';
 
@@ -19,12 +24,27 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-// Initialize Firestore with configured databaseId
-export const db = firebaseConfigData.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfigData.firestoreDatabaseId)
-  : getFirestore(app);
+// Initialize Firestore with persistent multi-tab cache for real-time data persistence
+let firestoreInstance;
+try {
+  const cacheSettings = {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  };
+  firestoreInstance = firebaseConfigData.firestoreDatabaseId
+    ? initializeFirestore(app, cacheSettings, firebaseConfigData.firestoreDatabaseId)
+    : initializeFirestore(app, cacheSettings);
+} catch {
+  firestoreInstance = firebaseConfigData.firestoreDatabaseId
+    ? getFirestore(app, firebaseConfigData.firestoreDatabaseId)
+    : getFirestore(app);
+}
+
+export const db = firestoreInstance;
 
 // Initialize Firebase Storage for photos
 export const storage = getStorage(app);
 
 export default app;
+

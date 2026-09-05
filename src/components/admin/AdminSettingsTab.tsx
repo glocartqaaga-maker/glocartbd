@@ -65,18 +65,26 @@ export const AdminSettingsTab: React.FC = () => {
   const [adminAuthFeedback, setAdminAuthFeedback] = useState<string | null>(null);
   const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
 
+  // Track if user is actively editing settings or admin auth to prevent background updates from wiping input
+  const isDirtyRef = useRef(false);
+  const isDirtyAuthRef = useRef(false);
+
   useEffect(() => {
-    setSettings(storeSettings);
+    // Only synchronize if user has NOT modified the form fields locally
+    if (!isDirtyRef.current) {
+      setSettings(storeSettings);
+    }
   }, [storeSettings]);
 
   useEffect(() => {
-    if (adminCredentials) {
+    if (!isDirtyAuthRef.current && adminCredentials) {
       setAdminUsername(adminCredentials.username || 'admin');
       setAdminEmail(adminCredentials.email || 'admin@glocartbd.com');
     }
   }, [adminCredentials]);
 
   const handleChange = (field: keyof StoreSettings, value: any) => {
+    isDirtyRef.current = true;
     setSettings((prev) => ({
       ...prev,
       [field]: value,
@@ -111,6 +119,7 @@ export const AdminSettingsTab: React.FC = () => {
         email: cleanEmail,
         password: adminNewPassword || adminCredentials?.password || 'glo123cart',
       });
+      isDirtyAuthRef.current = false;
       setAdminAuthFeedback('Changes saved successfully!');
       setAdminNewPassword('');
       setTimeout(() => setAdminAuthFeedback(null), 5000);
@@ -260,7 +269,8 @@ export const AdminSettingsTab: React.FC = () => {
       );
 
       updateStoreSettingsState(updatedPayload);
-      await refreshStoreSettings();
+      setSettings(updatedPayload);
+      isDirtyRef.current = false;
       setFeedback('Store settings & location updated and published live across website!');
       setTimeout(() => setFeedback(null), 3500);
     } catch (err: any) {
@@ -667,7 +677,7 @@ export const AdminSettingsTab: React.FC = () => {
               type="text"
               value={settings.address || ''}
               onChange={(e) => handleChange('address', e.target.value)}
-              placeholder="e.g. Level- 1, House- 17, Road- 4, Gulshan-1, Dhaka, Bangladesh"
+              placeholder="e.g. Level 4, House 28, Road 11, Banani, Dhaka-1213, Bangladesh"
               className="w-full px-3 py-2 bg-stone-50 border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden"
             />
           </div>
@@ -847,7 +857,10 @@ export const AdminSettingsTab: React.FC = () => {
               <input
                 type="text"
                 value={adminUsername}
-                onChange={(e) => setAdminUsername(e.target.value)}
+                onChange={(e) => {
+                  isDirtyAuthRef.current = true;
+                  setAdminUsername(e.target.value);
+                }}
                 placeholder="Username"
                 className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:outline-none focus:border-amber-500 font-medium"
                 required
@@ -863,7 +876,10 @@ export const AdminSettingsTab: React.FC = () => {
               <input
                 type="email"
                 value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
+                onChange={(e) => {
+                  isDirtyAuthRef.current = true;
+                  setAdminEmail(e.target.value);
+                }}
                 placeholder="Email"
                 className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:outline-none focus:border-amber-500 font-medium"
                 required

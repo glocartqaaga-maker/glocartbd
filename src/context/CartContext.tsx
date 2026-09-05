@@ -44,7 +44,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const cached = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (cached) {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(cached) };
+        const parsed = JSON.parse(cached);
+        // Clear any old stale Gulshan address from legacy cache
+        if (parsed.address && parsed.address.toLowerCase().includes('gulshan')) {
+          localStorage.removeItem(SETTINGS_STORAGE_KEY);
+        } else {
+          return { ...DEFAULT_SETTINGS, ...parsed };
+        }
       }
     } catch {}
     return DEFAULT_SETTINGS;

@@ -4,11 +4,11 @@ import { Category, Product, SliderBanner, StoreSettings } from '../types';
 
 export const DEFAULT_SETTINGS: StoreSettings = {
   storeName: 'GloCart BD',
-  phone: '+880 13370-80184',
-  email: 'info.glocartbd@gmail.com',
+  phone: '+880 1711-223344',
+  email: 'support@glocartbd.com',
   facebook: 'https://facebook.com/glocartbd',
   instagram: 'https://www.instagram.com/glocart_bd',
-  address: 'Level- 1, House- 17, Road- 4, gulshan -1, Dhaka, Bangladesh',
+  address: 'Level 4, House 28, Road 11, Banani, Dhaka-1213, Bangladesh',
   promoBar: '🎉 Grand Opening Offer! Free Shipping inside Dhaka on orders over ৳1,999 with code GLOCART10',
   heroText: 'Premium Shopping Delivered Across Bangladesh',
   heroSubtitle: 'Authentic electronics, trendy fashion, and lifestyle essentials with fast home delivery & easy returns.',
@@ -269,10 +269,25 @@ export const DEFAULT_PRODUCTS: Omit<Product, 'createdAt' | 'updatedAt'>[] = [
 
 export async function initializeDatabaseIfNeeded() {
   try {
-    // 1. Check Store Settings
-    const settingsDocRef = doc(db, 'settings', 'store');
-    const categoriesSnap = await getDocs(collection(db, 'categories'));
+    // If already verified as seeded in this client session, skip entirely
+    if (typeof window !== 'undefined' && localStorage.getItem('glocart_db_seeded') === 'true') {
+      return;
+    }
 
+    const settingsDocRef = doc(db, 'settings', 'store');
+    const settingsSnap = await getDoc(settingsDocRef);
+
+    // If store settings already exist in Firestore, the database is live and active.
+    // NEVER overwrite or tamper with existing store settings, products, or categories.
+    if (settingsSnap.exists()) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('glocart_db_seeded', 'true');
+      }
+      return;
+    }
+
+    // Only if the database is completely fresh and has no store settings:
+    const categoriesSnap = await getDocs(collection(db, 'categories'));
     if (categoriesSnap.empty) {
       console.log('Seeding initial categories...');
       const batch = writeBatch(db);
@@ -312,15 +327,16 @@ export async function initializeDatabaseIfNeeded() {
       await batch.commit();
     }
 
-    // Set default store settings only if the settings document does NOT already exist
-    const settingsSnap = await getDoc(settingsDocRef);
-    if (!settingsSnap.exists()) {
-      console.log('Seeding initial default store settings...');
-      await setDoc(settingsDocRef, {
-        ...DEFAULT_SETTINGS,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    // Initialize default store settings for fresh database
+    console.log('Seeding initial default store settings...');
+    await setDoc(settingsDocRef, {
+      ...DEFAULT_SETTINGS,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('glocart_db_seeded', 'true');
     }
 
     console.log('Database initialization check completed successfully.');
