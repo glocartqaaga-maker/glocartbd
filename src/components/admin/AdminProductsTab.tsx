@@ -56,8 +56,8 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
   const [price, setPrice] = useState<number | ''>('');
   const [oldPrice, setOldPrice] = useState<number | ''>('');
   const [stock, setStock] = useState<number | ''>('');
-  const [rating, setRating] = useState<number>(4.8);
-  const [reviews, setReviews] = useState<number>(45);
+  const [rating, setRating] = useState<number | ''>(4.8);
+  const [reviews, setReviews] = useState<number | ''>(45);
   const [badge, setBadge] = useState('');
   const [description, setDescription] = useState('');
   const [active, setActive] = useState(true);
@@ -68,6 +68,12 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [currentUploadingFile, setCurrentUploadingFile] = useState<string>('');
+
+  // Quick Rating Modal State (Allows editing rating directly from product list)
+  const [quickRatingProduct, setQuickRatingProduct] = useState<Product | null>(null);
+  const [quickRatingScore, setQuickRatingScore] = useState<number | ''>(4.8);
+  const [quickRatingReviews, setQuickRatingReviews] = useState<number | ''>(45);
+  const [isSavingQuickRating, setIsSavingQuickRating] = useState(false);
 
   // Form submit state
   const [isSaving, setIsSaving] = useState(false);
@@ -136,8 +142,8 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
     setPrice(prod.price);
     setOldPrice(prod.oldPrice || '');
     setStock(prod.stock);
-    setRating(prod.rating || 4.8);
-    setReviews(prod.reviews || 45);
+    setRating(prod.rating !== undefined ? prod.rating : 4.8);
+    setReviews(prod.reviews !== undefined ? prod.reviews : 45);
     setBadge(prod.badge || '');
     setDescription(prod.description);
     setActive(prod.active);
@@ -149,6 +155,36 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
     
     setFormError(null);
     setIsModalOpen(true);
+  };
+
+  // Quick Rating Modal Handlers (Allows 1-click rating edit directly from products table)
+  const handleOpenQuickRating = (e: React.MouseEvent, prod: Product) => {
+    e.stopPropagation();
+    setQuickRatingProduct(prod);
+    setQuickRatingScore(prod.rating !== undefined ? prod.rating : 4.8);
+    setQuickRatingReviews(prod.reviews !== undefined ? prod.reviews : 45);
+  };
+
+  const handleSaveQuickRating = async () => {
+    if (!quickRatingProduct) return;
+    setIsSavingQuickRating(true);
+    try {
+      const finalRating = quickRatingScore === '' ? 4.8 : Math.min(5, Math.max(1, parseFloat(Number(quickRatingScore).toFixed(1))));
+      const finalReviews = quickRatingReviews === '' ? 0 : Math.max(0, Number(quickRatingReviews));
+      const prodRef = doc(db, 'products', quickRatingProduct.id);
+      await setDoc(prodRef, {
+        rating: finalRating,
+        reviews: finalReviews,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      setFeedbackSuccess(`Rating for "${quickRatingProduct.name}" updated to ${finalRating} ★!`);
+      setQuickRatingProduct(null);
+    } catch (err: any) {
+      console.error('Error updating rating:', err);
+      alert('Failed to update rating. Please try again.');
+    } finally {
+      setIsSavingQuickRating(false);
+    }
   };
 
   // MULTIPLE PHOTO SELECTION HANDLER (Laptop, Desktop, Android, iPhone)
@@ -344,8 +380,8 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
         categoryName: selectedCategoryObj?.name || 'General',
         price: Number(price),
         stock: Number(stock),
-        rating: Number(rating) || 4.8,
-        reviews: Number(reviews) || 45,
+        rating: rating === '' ? 4.8 : Math.min(5, Math.max(1, parseFloat(Number(rating).toFixed(1)))),
+        reviews: reviews === '' ? 0 : Math.max(0, Number(reviews)),
         description: description.trim() || 'Genuine product with warranty & nationwide delivery.',
         active: active,
         primaryImage: chosenPrimary,
@@ -507,7 +543,20 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
                         </div>
                         <div className="min-w-0">
                           <p className="font-bold text-stone-900 truncate max-w-xs">{prod.name}</p>
-                          <div className="flex items-center gap-1.5 text-[11px] text-stone-400">
+                          <div className="flex items-center gap-2 text-[11px] text-stone-400 flex-wrap mt-0.5">
+                            {/* Clickable quick rating badge with edit button */}
+                            <button
+                              type="button"
+                              onClick={(e) => handleOpenQuickRating(e, prod)}
+                              className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded-md border border-amber-200 transition-all hover:scale-105 cursor-pointer shadow-2xs group/rate"
+                              title="Click to quickly edit rating & reviews"
+                            >
+                              <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                              <span>{prod.rating !== undefined ? prod.rating : 4.8}</span>
+                              <span className="text-stone-400 font-normal">({prod.reviews !== undefined ? prod.reviews : 45})</span>
+                              <Edit3 className="w-2.5 h-2.5 text-amber-600 opacity-60 group-hover/rate:opacity-100 ml-0.5" />
+                            </button>
+                            <span>•</span>
                             <span>{prod.images?.length || 1} photo(s)</span>
                             {prod.badge && (
                               <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 font-bold rounded-md text-[10px]">
@@ -716,6 +765,122 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
                     placeholder="e.g. 25"
                     className="w-full px-3 py-2 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden font-bold"
                   />
+                </div>
+              </div>
+
+              {/* Rating & Reviews Section (User Request: add korar somoy rating add kora jabe and edit kora jabe) */}
+              <div className="p-3 bg-amber-50/60 rounded-2xl border border-amber-200/90 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                    <span>Product Rating & Reviews (প্রোডাক্ট রেটিং এবং রিভিউ সংখ্যা)</span>
+                  </label>
+                  <span className="text-[11px] text-amber-800 font-bold bg-amber-100/80 px-2 py-0.5 rounded-md">
+                    {rating !== '' ? Number(rating).toFixed(1) : '4.8'} ★ ({reviews !== '' ? reviews : 0} reviews)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Rating Input & Star Selector */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                      Rating Score (১.০ থেকে ৫.০ এর মধ্যে)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        max="5"
+                        value={rating}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            setRating('');
+                          } else {
+                            const num = parseFloat(val);
+                            setRating(isNaN(num) ? '' : num);
+                          }
+                        }}
+                        placeholder="e.g. 4.8"
+                        className="w-full px-3 py-2 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden font-bold"
+                      />
+                      {/* Clickable 5 Stars */}
+                      <div className="flex items-center gap-0.5 shrink-0 bg-white px-2 py-1 rounded-xl border border-stone-200 shadow-2xs">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setRating(s)}
+                            className="p-0.5 hover:scale-125 transition-transform cursor-pointer"
+                            title={`Set to ${s}.0 Star`}
+                          >
+                            <Star
+                              className={`w-3.5 h-3.5 ${
+                                (Number(rating) || 0) >= s
+                                  ? 'fill-amber-400 text-amber-500'
+                                  : 'text-stone-300'
+                              }`}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Quick Rating Presets */}
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                      <span className="text-[10px] text-stone-500">Preset:</span>
+                      {[5.0, 4.9, 4.8, 4.7, 4.5, 4.0].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setRating(preset)}
+                          className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold transition-all ${
+                            Number(rating) === preset
+                              ? 'bg-amber-500 text-stone-950 shadow-2xs'
+                              : 'bg-white border border-stone-200 text-stone-700 hover:border-amber-400'
+                          }`}
+                        >
+                          {preset}★
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Reviews Count Input */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-stone-700 mb-1">
+                      Total Reviews Count (রিভিউ সংখ্যা)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={reviews}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setReviews(val === '' ? '' : parseInt(val, 10));
+                      }}
+                      placeholder="e.g. 45"
+                      className="w-full px-3 py-2 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-xs text-stone-900 focus:outline-hidden font-bold"
+                    />
+                    {/* Quick Reviews Count Presets */}
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                      <span className="text-[10px] text-stone-500">Preset:</span>
+                      {[15, 32, 45, 88, 120, 250].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setReviews(preset)}
+                          className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold transition-all ${
+                            Number(reviews) === preset
+                              ? 'bg-amber-500 text-stone-950 shadow-2xs'
+                              : 'bg-white border border-stone-200 text-stone-700 hover:border-amber-400'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1081,6 +1246,183 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Rating & Reviews Modal (Directly update rating without opening full modal) */}
+      {quickRatingProduct && (
+        <div
+          id="quick-rating-modal"
+          onClick={() => setQuickRatingProduct(null)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-md rounded-3xl p-5 shadow-2xl border border-stone-200 space-y-4"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-50 text-amber-600 rounded-xl border border-amber-200/80">
+                  <Star className="w-5 h-5 fill-amber-400 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-stone-900">Edit Rating & Reviews</h3>
+                  <p className="text-[11px] text-stone-500">রেটিং এবং রিভিউ সংখ্যা পরিবর্তন করুন</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickRatingProduct(null)}
+                className="p-1.5 text-stone-400 hover:text-stone-700 rounded-xl hover:bg-stone-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Product Mini Preview */}
+            <div className="flex items-center gap-2.5 p-2 bg-stone-50 rounded-2xl border border-stone-200/80">
+              <div className="w-10 h-10 bg-white rounded-xl border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center p-0.5">
+                <img
+                  src={quickRatingProduct.primaryImage || quickRatingProduct.images?.[0]?.url}
+                  alt={quickRatingProduct.name}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-stone-900 truncate">{quickRatingProduct.name}</p>
+                <p className="text-[11px] text-stone-500 font-medium">৳{quickRatingProduct.price.toLocaleString('en-BD')}</p>
+              </div>
+            </div>
+
+            {/* Inputs */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-stone-800 mb-1">
+                  Rating Score (১.০ থেকে ৫.০)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    max="5"
+                    value={quickRatingScore}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        setQuickRatingScore('');
+                      } else {
+                        const num = parseFloat(val);
+                        setQuickRatingScore(isNaN(num) ? '' : num);
+                      }
+                    }}
+                    placeholder="e.g. 4.9"
+                    className="w-full px-3 py-2 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-sm font-bold text-stone-900 focus:outline-hidden"
+                  />
+                  <div className="flex items-center gap-0.5 bg-stone-50 px-2 py-1.5 rounded-xl border border-stone-200 shrink-0">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setQuickRatingScore(star)}
+                        className="p-0.5 hover:scale-125 transition-transform"
+                      >
+                        <Star
+                          className={`w-4 h-4 ${
+                            (Number(quickRatingScore) || 0) >= star
+                              ? 'fill-amber-400 text-amber-500'
+                              : 'text-stone-300'
+                          }`}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Presets */}
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                  <span className="text-[10px] text-stone-500 font-medium">Preset:</span>
+                  {[5.0, 4.9, 4.8, 4.7, 4.5, 4.0].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setQuickRatingScore(preset)}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all ${
+                        Number(quickRatingScore) === preset
+                          ? 'bg-amber-500 text-stone-950 shadow-2xs'
+                          : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                      }`}
+                    >
+                      {preset}★
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-800 mb-1">
+                  Reviews Count (রিভিউ সংখ্যা)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={quickRatingReviews}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setQuickRatingReviews(val === '' ? '' : parseInt(val, 10));
+                  }}
+                  placeholder="e.g. 64"
+                  className="w-full px-3 py-2 bg-white border border-stone-300 focus:border-amber-500 rounded-xl text-sm font-bold text-stone-900 focus:outline-hidden"
+                />
+                {/* Review count presets */}
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                  <span className="text-[10px] text-stone-500 font-medium">Preset:</span>
+                  {[12, 28, 45, 84, 150, 240].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setQuickRatingReviews(preset)}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all ${
+                        Number(quickRatingReviews) === preset
+                          ? 'bg-amber-500 text-stone-950 shadow-2xs'
+                          : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setQuickRatingProduct(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQuickRating}
+                disabled={isSavingQuickRating}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-stone-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isSavingQuickRating ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Rating</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
