@@ -295,12 +295,14 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                   {order.items?.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between p-2.5 bg-white border border-stone-200 rounded-xl text-xs">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          referrerPolicy="no-referrer"
-                          className="w-10 h-10 object-cover rounded-lg border border-stone-200"
-                        />
+                        <div className="w-10 h-10 bg-stone-50 rounded-lg border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center p-0.5">
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
                         <div className="min-w-0">
                           <p className="font-semibold text-stone-900 truncate">{item.name}</p>
                           <p className="text-stone-500 text-[11px]">Qty: {item.quantity} × ৳{item.price.toLocaleString('en-BD')}</p>

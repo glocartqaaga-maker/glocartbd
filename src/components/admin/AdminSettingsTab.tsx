@@ -508,6 +508,55 @@ export const AdminSettingsTab: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Product Photo Fit Display Option */}
+            <div className="pt-3 border-t border-stone-100">
+              <label className="block text-xs font-bold text-stone-900 mb-1.5 flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-amber-600" />
+                Product Photos Display Mode (প্রোডাক্টের ছবি প্রদর্শনের ধরন)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleChange('productImageFit', 'contain')}
+                  className={`p-3 rounded-2xl border text-left transition-all ${
+                    (settings.productImageFit || 'contain') === 'contain'
+                      ? 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-400/20'
+                      : 'border-stone-200 hover:border-stone-300 bg-stone-50/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-stone-900">Full Photo (পুরো ছবি দেখাবে)</span>
+                    {(settings.productImageFit || 'contain') === 'contain' && (
+                      <span className="text-[10px] bg-amber-500 text-stone-950 font-bold px-1.5 py-0.5 rounded-md">সক্রিয়</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-stone-500 leading-relaxed">
+                    ছবি কোনো অংশে কাটবে না (No Cropping)। প্রোডাক্টের সম্পূর্ণ ফটো সুস্পষ্টভাবে দেখা যাবে।
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleChange('productImageFit', 'cover')}
+                  className={`p-3 rounded-2xl border text-left transition-all ${
+                    settings.productImageFit === 'cover'
+                      ? 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-400/20'
+                      : 'border-stone-200 hover:border-stone-300 bg-stone-50/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-stone-900">Cover / Fill (বক্স ভর্তি)</span>
+                    {settings.productImageFit === 'cover' && (
+                      <span className="text-[10px] bg-amber-500 text-stone-950 font-bold px-1.5 py-0.5 rounded-md">সক্রিয়</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-stone-500 leading-relaxed">
+                    পুরো বক্স সমানভাবে পূরণ করবে, তবে ছবির বাইরের অংশ কিছুটা ক্রপ হতে পারে।
+                  </p>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

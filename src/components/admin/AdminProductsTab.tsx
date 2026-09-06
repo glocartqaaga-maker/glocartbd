@@ -15,7 +15,9 @@ import {
   Sparkles,
   Package,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Eye,
+  Maximize2
 } from 'lucide-react';
 import { 
   collection, 
@@ -77,6 +79,7 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
   const [customImageUrl, setCustomImageUrl] = useState('');
+  const [previewFullPhotoUrl, setPreviewFullPhotoUrl] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -490,12 +493,16 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
                   <tr key={prod.id} className="hover:bg-stone-50/60 transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-stone-100 border border-stone-200 overflow-hidden shrink-0">
+                        <div 
+                          onClick={() => setPreviewFullPhotoUrl(prod.primaryImage || prod.images?.[0]?.url || null)}
+                          className="w-12 h-12 rounded-xl bg-stone-50 border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center p-1 cursor-pointer hover:border-amber-400 transition-colors"
+                          title="Click to view full photo"
+                        >
                           <img
                             src={prod.primaryImage || prod.images?.[0]?.url}
                             alt={prod.name}
                             referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain"
                           />
                         </div>
                         <div className="min-w-0">
@@ -788,25 +795,31 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
                   </div>
                 )}
 
-                {/* Photos Grid & Primary Selector */}
+                {/* Photos Grid & Primary Selector - Full uncropped photo preview */}
                 {images.length > 0 ? (
                   <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium px-1">
+                      <span>{images.length} photo(s) uploaded • All photos show in 100% full view without cropping</span>
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-3 bg-stone-50 rounded-2xl border border-stone-200">
                       {images.map((img, index) => {
                         const isPrimary = primaryImageUrl === img.url;
                         return (
                           <div
                             key={index}
-                            className={`relative group aspect-square rounded-xl overflow-hidden border-2 bg-white shadow-xs flex flex-col justify-between p-1.5 ${
+                            className={`relative group aspect-square rounded-xl overflow-hidden border-2 bg-stone-100/60 shadow-xs flex flex-col justify-between p-1 ${
                               isPrimary ? 'border-amber-500 ring-2 ring-amber-400/30' : 'border-stone-200'
                             }`}
                           >
-                            <img
-                              src={img.url}
-                              alt={`Product Photo ${index + 1}`}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover rounded-lg"
-                            />
+                            {/* Uncropped Full Photo Container */}
+                            <div className="w-full h-full bg-white rounded-lg flex items-center justify-center p-1 overflow-hidden">
+                              <img
+                                src={img.url}
+                                alt={`Product Photo ${index + 1}`}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-contain rounded-md"
+                              />
+                            </div>
 
                             {/* Top Badges & Controls */}
                             <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
@@ -825,20 +838,33 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
                                 </button>
                               )}
 
-                              {/* Prominent Red Remove Photo Button */}
-                              <button
-                                type="button"
-                                onClick={(e) => handleRemovePhoto(e, index)}
-                                className="p-1.5 bg-rose-600 hover:bg-rose-700 active:scale-90 text-white rounded-lg shadow-md pointer-events-auto transition-all flex items-center justify-center cursor-pointer"
-                                title="Remove / Delete this photo"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-1 pointer-events-auto">
+                                {/* Preview Full Photo button */}
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewFullPhotoUrl(img.url)}
+                                  className="p-1.5 bg-stone-900/80 hover:bg-stone-900 text-white rounded-lg shadow-md transition-all flex items-center justify-center cursor-pointer"
+                                  title="View 100% full photo"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Prominent Red Remove Photo Button */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleRemovePhoto(e, index)}
+                                  className="p-1.5 bg-rose-600 hover:bg-rose-700 active:scale-90 text-white rounded-lg shadow-md pointer-events-auto transition-all flex items-center justify-center cursor-pointer"
+                                  title="Remove / Delete this photo"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
 
                             {/* Bottom Photo Number */}
-                            <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md backdrop-blur-xs">
-                              Photo #{index + 1}
+                            <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md backdrop-blur-xs flex items-center gap-1">
+                              <span>Photo #{index + 1}</span>
+                              <span className="text-[8px] text-amber-300 font-normal">(Full)</span>
                             </div>
                           </div>
                         );
@@ -936,12 +962,14 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
 
             {/* Product mini preview */}
             <div className="flex items-center gap-3 p-2.5 bg-stone-50 rounded-2xl border border-stone-200">
-              <img
-                src={productToDelete.primaryImage || productToDelete.images?.[0]?.url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100'}
-                alt={productToDelete.name}
-                referrerPolicy="no-referrer"
-                className="w-12 h-12 object-cover rounded-xl border border-stone-200"
-              />
+              <div className="w-12 h-12 bg-white rounded-xl border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center p-0.5">
+                <img
+                  src={productToDelete.primaryImage || productToDelete.images?.[0]?.url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100'}
+                  alt={productToDelete.name}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-contain"
+                />
+              </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-stone-900 truncate">{productToDelete.name}</p>
                 <p className="text-[11px] font-extrabold text-amber-600">৳{productToDelete.price.toLocaleString('en-BD')}</p>
@@ -1053,6 +1081,43 @@ export const AdminProductsTab: React.FC<AdminProductsTabProps> = ({ categories }
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Full Photo Preview Lightbox (100% uncropped view) */}
+      {previewFullPhotoUrl && (
+        <div
+          id="admin-photo-preview-modal"
+          onClick={() => setPreviewFullPhotoUrl(null)}
+          className="fixed inset-0 z-60 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-4xl flex items-center justify-between text-white pb-3 border-b border-white/10"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2 py-0.5 bg-amber-500 text-stone-950 rounded-md">100% Full View</span>
+              <p className="text-xs text-stone-300">Uncropped Photo Quality Check</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPreviewFullPhotoUrl(null)}
+              className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative flex-1 w-full max-w-4xl flex items-center justify-center p-4 overflow-hidden"
+          >
+            <img
+              src={previewFullPhotoUrl}
+              alt="Full Preview"
+              referrerPolicy="no-referrer"
+              className="max-w-full max-h-[82vh] object-contain rounded-2xl shadow-2xl"
+            />
           </div>
         </div>
       )}

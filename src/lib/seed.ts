@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
   couponCode: 'GLOCART10',
   couponDiscountPercent: 10,
   lowStockThreshold: 5,
+  productImageFit: 'contain',
   steadfastApiKey: 'emud5zhwfadjuyljkwxvqan2czrqn8si',
   steadfastSecretKey: 'igkruxuikw9ykrbkftr9qgme',
   autoBookSteadfast: true,

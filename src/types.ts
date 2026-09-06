@@ -151,6 +151,7 @@ export interface StoreSettings {
   couponCode: string;
   couponDiscountPercent: number;
   lowStockThreshold: number;
+  productImageFit?: 'contain' | 'cover';
   steadfastApiKey?: string;
   steadfastSecretKey?: string;
   autoBookSteadfast?: boolean;

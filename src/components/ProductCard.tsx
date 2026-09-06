@@ -9,10 +9,11 @@ interface ProductCardProps {
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelectProduct }) => {
-  const { addToCart } = useCart();
+  const { addToCart, storeSettings } = useCart();
   const [addedAnimation, setAddedAnimation] = React.useState(false);
 
   const displayImage = product.primaryImage || product.images?.[0]?.url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80';
+  const isContain = storeSettings.productImageFit !== 'cover';
 
   const discountPercent = product.oldPrice && product.oldPrice > product.price
     ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
@@ -37,14 +38,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelectProdu
       onClick={() => onSelectProduct(product)}
       className="group relative bg-white rounded-2xl border border-stone-200/80 hover:border-amber-400/80 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden cursor-pointer"
     >
-      {/* Product Image Container */}
-      <div className="relative aspect-square w-full bg-stone-100 overflow-hidden">
+      {/* Product Image Container - Full photo show without cropping */}
+      <div className={`relative aspect-square w-full overflow-hidden ${isContain ? 'bg-stone-50/90 flex items-center justify-center p-2.5' : 'bg-stone-100'}`}>
         <img
           src={displayImage}
           alt={product.name}
           referrerPolicy="no-referrer"
           loading="lazy"
-          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+          className={`w-full h-full transition-transform duration-300 group-hover:scale-105 ${
+            isContain ? 'object-contain object-center' : 'object-cover object-center'
+          }`}
         />
 
         {/* Badges Overlay */}

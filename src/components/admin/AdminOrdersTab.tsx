@@ -739,12 +739,14 @@ export const AdminOrdersTab: React.FC = () => {
                     className="p-2.5 bg-white border border-stone-200 rounded-xl flex items-center justify-between text-xs"
                   >
                     <div className="flex items-center gap-2.5">
-                      <img
-                        src={it.image}
-                        alt={it.name}
-                        referrerPolicy="no-referrer"
-                        className="w-10 h-10 object-cover rounded-lg border border-stone-200"
-                      />
+                      <div className="w-10 h-10 bg-stone-50 rounded-lg border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center p-0.5">
+                        <img
+                          src={it.image}
+                          alt={it.name}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
                       <div>
                         <p className="font-bold text-stone-900">{it.name}</p>
                         <p className="text-stone-500 text-[11px]">

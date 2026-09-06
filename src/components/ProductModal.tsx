@@ -10,7 +10,8 @@ import {
   RotateCcw, 
   Plus, 
   Minus,
-  Sparkles
+  Sparkles,
+  Maximize2
 } from 'lucide-react';
 import { Product } from '../types';
 import { useCart } from '../context/CartContext';
@@ -36,6 +37,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [addFeedback, setAddFeedback] = useState(false);
+  const [isZoomOpen, setIsZoomOpen] = useState(false);
 
   // Combine primaryImage and all images array
   const allImages = React.useMemo(() => {
@@ -118,19 +120,29 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         <div className="overflow-y-auto p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Column: Multi-Photo Gallery */}
           <div className="space-y-3">
-            {/* Main Stage Image */}
-            <div className="relative aspect-square w-full rounded-2xl bg-stone-100 overflow-hidden border border-stone-200 shadow-inner">
+            {/* Main Stage Image - Full uncropped photo show */}
+            <div className="relative aspect-square w-full rounded-2xl bg-stone-50 overflow-hidden border border-stone-200 shadow-inner flex items-center justify-center p-3 group">
               <img
                 src={currentImage}
                 alt={product.name}
                 referrerPolicy="no-referrer"
-                className="w-full h-full object-cover object-center transition-all duration-300"
+                className="w-full h-full object-contain object-center transition-all duration-300"
               />
               {discountPercent > 0 && (
                 <div className="absolute top-3 left-3 bg-rose-600 text-white font-black text-xs px-2.5 py-1 rounded-lg shadow-md">
                   SAVE {discountPercent}%
                 </div>
               )}
+              {/* Full Photo Zoom Button */}
+              <button
+                type="button"
+                onClick={() => setIsZoomOpen(true)}
+                className="absolute bottom-3 right-3 px-2.5 py-1.5 bg-white/90 hover:bg-white text-stone-700 hover:text-stone-950 rounded-xl shadow-md transition-all opacity-85 hover:opacity-100 flex items-center gap-1.5 text-xs font-semibold border border-stone-200/80 cursor-pointer"
+                title="Click to view full photo in full screen"
+              >
+                <Maximize2 className="w-3.5 h-3.5 text-amber-600" />
+                <span>Full Photo</span>
+              </button>
             </div>
 
             {/* Thumbnail Carousel (Mobile & Desktop) */}
@@ -141,9 +153,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                     key={index}
                     id={`thumb-photo-${index}`}
                     onClick={() => setSelectedImageIndex(index)}
-                    className={`relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${
+                    className={`relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all p-1 bg-stone-50 flex items-center justify-center ${
                       selectedImageIndex === index
-                        ? 'border-amber-600 scale-95 shadow-md'
+                        ? 'border-amber-600 scale-95 shadow-md bg-amber-50/40'
                         : 'border-stone-200 hover:border-stone-300 opacity-70 hover:opacity-100'
                     }`}
                   >
@@ -151,7 +163,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
                       src={imgUrl}
                       alt={`Photo ${index + 1}`}
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   </button>
                 ))}
@@ -290,6 +302,73 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Full-Screen Zoom Photo Modal (Full Show 100% Uncropped) */}
+      {isZoomOpen && (
+        <div
+          id="product-photo-zoom-modal"
+          onClick={() => setIsZoomOpen(false)}
+          className="fixed inset-0 z-60 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          {/* Top Bar */}
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="w-full max-w-4xl flex items-center justify-between text-white pb-3 border-b border-white/10"
+          >
+            <div>
+              <p className="text-sm font-bold truncate">{product.name}</p>
+              <p className="text-xs text-stone-400">
+                Photo {selectedImageIndex + 1} of {allImages.length} (Full High-Resolution View)
+              </p>
+            </div>
+            <button
+              onClick={() => setIsZoomOpen(false)}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              title="Close Full Photo"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Full Photo Container */}
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="relative flex-1 w-full max-w-4xl flex items-center justify-center p-2 sm:p-6 overflow-hidden"
+          >
+            <img
+              src={currentImage}
+              alt={product.name}
+              referrerPolicy="no-referrer"
+              className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl drop-shadow-2xl"
+            />
+          </div>
+
+          {/* Bottom Thumbnails */}
+          {allImages.length > 1 && (
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-2 overflow-x-auto py-2 px-3 bg-white/10 backdrop-blur-md rounded-2xl max-w-full"
+            >
+              {allImages.map((imgUrl, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedImageIndex(index)}
+                  className={`relative w-12 h-12 rounded-lg overflow-hidden border-2 transition-all p-0.5 bg-black/40 ${
+                    selectedImageIndex === index ? 'border-amber-400 scale-105' : 'border-transparent opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  <img
+                    src={imgUrl}
+                    alt={`Photo ${index + 1}`}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-contain"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

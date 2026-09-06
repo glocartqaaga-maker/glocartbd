@@ -152,12 +152,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 className="flex items-center gap-3 p-3 bg-stone-50/80 hover:bg-stone-50 rounded-2xl border border-stone-200/70 transition-all"
               >
                 {/* Thumbnail */}
-                <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl bg-white border border-stone-200 overflow-hidden shrink-0">
+                <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl bg-white border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center p-1">
                   <img
                     src={item.image}
                     alt={item.name}
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover object-center"
+                    className="w-full h-full object-contain object-center"
                   />
                 </div>
 

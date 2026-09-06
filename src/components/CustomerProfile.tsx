@@ -492,12 +492,14 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
                     <div className="flex items-center gap-2 overflow-x-auto py-1">
                       {ord.items?.map((it, idx) => (
                         <div key={idx} className="flex items-center gap-1.5 shrink-0 bg-white p-1.5 rounded-lg border border-stone-200 text-xs">
-                          <img
-                            src={it.image}
-                            alt={it.name}
-                            referrerPolicy="no-referrer"
-                            className="w-8 h-8 rounded-md object-cover"
-                          />
+                          <div className="w-8 h-8 rounded-md bg-stone-50 border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center p-0.5">
+                            <img
+                              src={it.image}
+                              alt={it.name}
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
                           <span className="font-semibold text-stone-800 text-[11px] truncate max-w-[120px]">
                             {it.name}
                           </span>
